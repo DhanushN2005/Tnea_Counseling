@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TNEA Pro AI Assistant | Premium Counselling Guidance</title>
+    <link rel="stylesheet" href="style.css?v=5.0">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="dark-theme">
+    <!-- Premium Ambient Cyber Backgrounds -->
+    <div class="grid-background"></div>
+    <div class="radial-spotlight spotlight-1"></div>
+    <div class="radial-spotlight spotlight-2"></div>
+    <div class="radial-spotlight spotlight-3"></div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-section">
+                <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
+                <h1>TNEA PRO <span>AI</span></h1>
+            </div>
+            
+            <div class="theme-toggle-container">
+                <button id="theme-toggle" class="nav-item theme-btn">
+                    <span class="icon"><i class="fas fa-moon"></i></span>
+                    <span class="label">Dark Mode</span>
+                </button>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="chat">
+                    <span class="icon"><i class="fas fa-comment-dots"></i></span>
+                    <span class="label">Counselling Expert</span>
+                </button>
+                <button class="nav-item" data-tab="finder">
+                    <span class="icon"><i class="fas fa-search-location"></i></span>
+                    <span class="label">College Finder</span>
+                </button>
+                <button class="nav-item" data-tab="directory">
+                    <span class="icon"><i class="fas fa-list-ul"></i></span>
+                    <span class="label">College Directory</span>
+                </button>
+                <button class="nav-item" data-tab="choices">
+                    <span class="icon"><i class="fas fa-clipboard-list"></i></span>
+                    <span class="label">My Choice List</span>
+                    <span id="choice-count" class="badge">0</span>
+                </button>
+                <button class="nav-item" data-tab="tfc">
+                    <span class="icon"><i class="fas fa-map-marker-alt"></i></span>
+                    <span class="label">TFC Centers</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="info-pill">
+                    <span>Cutoff</span>
+                    <span id="session-cutoff" class="pill-value">---</span>
+                </div>
+                <div class="info-pill">
+                    <span>Category</span>
+                    <span id="session-category" class="pill-value">---</span>
+                </div>
+                <button id="clear-memory" class="btn-secondary clear-btn">
+                    <i class="fas fa-trash-alt"></i> Clear Chat Memory
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="mobile-nav-header">
+                <div class="logo-section mobile-logo">
+                    <div class="logo-icon mobile-logo-icon"><i class="fas fa-graduation-cap"></i></div>
+                    <h1 class="mobile-logo-title">TNEA PRO <span>AI</span></h1>
+                </div>
+                <button id="mobile-toggle" class="btn-secondary mobile-menu-btn">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </header>
+            
+            <!-- Chat View -->
+            <section id="chat-view" class="view active">
+                <header class="view-header">
+                    <h2><i class="fas fa-robot robot-header-icon"></i>Counselling Strategy Expert</h2>
+                    <p class="subtitle">Personalized AI guidance for your academic future</p>
+                </header>
+                <div id="chat-container" class="chat-container">
+                    <div class="chat-message-row bot">
+                        <div class="chat-avatar bot-avatar">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="chat-message bot">
+                            <div class="message-content">
+                                <h3 class="welcome-title">Welcome to TNEA PRO AI! <span class="welcome-title-icon"><i class="fas fa-graduation-cap"></i></span></h3>
+                                <p class="welcome-intro">I'm your dedicated admission strategist. Get started instantly with these popular questions or type your own below:</p>
+                                
+                                <div class="preset-cards">
+                                    <button class="preset-card" data-prompt="Predict my colleges based on a 188.5 cutoff and BC category.">
+                                        <span class="preset-icon"><i class="fas fa-magic"></i></span>
+                                        <span class="preset-label">Predict Colleges</span>
+                                        <span class="preset-desc">See Safe/Moderate/Dream options</span>
+                                    </button>
+                                    <button class="preset-card" data-prompt="What are the top 5 engineering colleges in Chennai with CSE cutoff history?">
+                                        <span class="preset-icon"><i class="fas fa-university"></i></span>
+                                        <span class="preset-label">Top Chennai Colleges</span>
+                                        <span class="preset-desc">Compare CSE course cutoffs</span>
+                                    </button>
+                                    <button class="preset-card" data-prompt="What scholarships or tuition fee concessions are available under TNEA?">
+                                        <span class="preset-icon"><i class="fas fa-award"></i></span>
+                                        <span class="preset-label">Scholarship Info</span>
+                                        <span class="preset-desc">Explore free education schemes</span>
+                                    </button>
+                                    <button class="preset-card" data-prompt="How should I arrange my choices to avoid losing a seat? Give choice filling strategy.">
+                                        <span class="preset-icon"><i class="fas fa-chess-knight"></i></span>
+                                        <span class="preset-label">Choice Strategy</span>
+                                        <span class="preset-desc">Maximize your seat probability</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-area">
+                    <div class="input-wrapper">
+                        <input type="text" id="chat-input" placeholder="Ask about eligibility, scholarships, or strategy...">
+                        <button id="send-btn" class="send-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Finder View -->
+            <section id="finder-view" class="view">
+                <header class="view-header">
+                    <h2>Intelligent College Recommender</h2>
+                    <p class="subtitle">Historical data analysis for optimal seat allocation</p>
+                </header>
+                <div class="finder-form-card">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Your Cutoff</label>
+                            <input type="number" id="input-cutoff" placeholder="e.g. 185.25" step="0.25">
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <select id="input-category">
+                                <option value="" disabled selected>Select Category</option>
+                                <option value="OC">OC</option>
+                                <option value="BC">BC</option>
+                                <option value="BCM">BCM</option>
+                                <option value="MBC">MBC</option>
+                                <option value="SC">SC</option>
+                                <option value="SCA">SCA</option>
+                                <option value="ST">ST</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>District (Optional)</label>
+                            <input type="text" id="input-district" placeholder="e.g. Chennai">
+                        </div>
+                        <div class="form-group">
+                            <label>Branch (Optional)</label>
+                            <input type="text" id="input-branch" placeholder="e.g. Computer Science">
+                        </div>
+                    </div>
+                    <button id="find-colleges-btn" class="btn-primary">Find My Colleges</button>
+                </div>
+
+                <div class="results-tabs">
+                    <button class="tab-btn active" data-tier="safe">High Probability</button>
+                    <button class="tab-btn" data-tier="moderate">Good Match</button>
+                    <button class="tab-btn" data-tier="dream">Aspirational Reach</button>
+                </div>
+
+                <div id="results-container" class="results-container">
+                    <div class="empty-state">Enter your details and click search to see recommendations</div>
+                </div>
+            </section>
+
+            <!-- Directory View -->
+            <section id="directory-view" class="view">
+                <header class="view-header">
+                    <h2>College Cutoff Directory</h2>
+                    <p class="subtitle">Comprehensive overview of previous year cutoff ranges</p>
+                </header>
+                <div class="directory-search-wrapper">
+                    <i class="fas fa-search directory-search-icon"></i>
+                    <input type="text" id="directory-search" placeholder="Search colleges by name, district, code, or branch...">
+                </div>
+                <div class="directory-list" id="directory-container">
+                    <div class="empty-state">Loading directory...</div>
+                </div>
+            </section>
+
+            <!-- Profile View -->
+            <section id="profile-view" class="view">
+                <header class="view-header">
+                    <button id="back-btn" class="btn-secondary back-profile-btn">← Back</button>
+                    <h2 id="profile-name">College Name</h2>
+                    <p id="profile-subtitle" class="subtitle">District | Code: 0000</p>
+                </header>
+                <div id="profile-content" class="profile-content">
+                    <!-- Dynamic content here -->
+                </div>
+            </section>
+
+            <!-- Choice List View -->
+            <section id="choices-view" class="view">
+                <header class="view-header">
+                    <h2>My Choice List</h2>
+                    <p class="subtitle">Draft your TNEA choice list for final submission</p>
+                    <button id="export-pdf-btn" class="btn-primary export-pdf-btn">Download Choice List (PDF)</button>
+                </header>
+                <div id="choices-container" class="directory-list">
+                    <!-- Choices here -->
+                </div>
+            </section>
+
+            <!-- TFC View -->
+            <section id="tfc-view" class="view">
+                <header class="view-header">
+                    <h2>TNEA Facilitation Centers (TFC)</h2>
+                    <p class="subtitle">Official centers for document verification and guidance</p>
+                </header>
+                <div class="tfc-search-wrapper">
+                    <i class="fas fa-search tfc-search-icon"></i>
+                    <input type="text" id="tfc-search" placeholder="Search TFC by name, district, or coordinator...">
+                </div>
+                <div id="tfc-container" class="directory-list tfc-grid">
+                    <!-- TFCs here -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loader"></div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
