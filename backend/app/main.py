@@ -65,6 +65,111 @@ embeddings = HuggingFaceEmbeddings(
 vector_db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings, collection_name="tnea_docs")
 print(f"--- Embeddings initialized on device: {device} ---")
 
+def clean_district_name(d: str) -> str:
+    if not d:
+        return "Tamil Nadu"
+    d_upper = d.strip().upper()
+    DISTRICT_MAPPING = {
+        "CHENGALPET": "CHENGALPATTU",
+        "KANCHIPURAM": "KANCHIPURAM",
+        "KANCHIPURAM": "KANCHIPURAM",
+        "COIMBATORE": "COIMBATORE",
+        "NAMAKKAL": "NAMAKKAL"
+    }
+    return DISTRICT_MAPPING.get(d_upper, d_upper).title()
+
+def clean_branch_name(name: str) -> str:
+    if not name:
+        return "General"
+    
+    # Strip and convert multiple spaces to a single space
+    b = " ".join(name.strip().split())
+    b_upper = b.upper()
+    
+    # Common spelling, naming, and acronym normalization
+    if b_upper in ["AGRICULTURE ENGINEERING", "AGRICULTURAL ENGINEERING"]:
+        return "Agricultural Engineering"
+    
+    if b_upper in ["COMPUTER SCIENCE AND BUSSINESS SYSTEM", "COMPUTER SCIENCE AND BUSINESS SYSTEM"]:
+        return "Computer Science and Business System"
+    if b_upper == "COMPUTER SCIENCE AND BUSINESS SYSTEM (SS)":
+        return "Computer Science and Business System (SS)"
+        
+    BRANCH_MAP = {
+        "AERONAUTICAL ENGINEERING": "Aeronautical Engineering",
+        "AEROSPACE ENGINEERING": "Aerospace Engineering",
+        "AUTOMOBILE ENGINEERING": "Automobile Engineering",
+        "AUTOMOBILE ENGINEERING (SS)": "Automobile Engineering (SS)",
+        "BIO MEDICAL ENGINEERING": "Bio Medical Engineering",
+        "BIO MEDICAL ENGINEERING (SS)": "Bio Medical Engineering (SS)",
+        "BIO MEDICAL ENGINEERING  (SS)": "Bio Medical Engineering (SS)",
+        "BIO TECHNOLOGY": "Bio Technology",
+        "BIO TECHNOLOGY (SS)": "Bio Technology (SS)",
+        "CHEMICAL ENGINEERING": "Chemical Engineering",
+        "CHEMICAL ENGINEERING (SS)": "Chemical Engineering (SS)",
+        "CHEMICAL  ENGINEERING": "Chemical Engineering",
+        "CHEMICAL  ENGINEERING (SS)": "Chemical Engineering (SS)",
+        "CIVIL ENGINEERING": "Civil Engineering",
+        "CIVIL ENGINEERING (SS)": "Civil Engineering (SS)",
+        "CIVIL  ENGINEERING": "Civil Engineering",
+        "CIVIL  ENGINEERING (SS)": "Civil Engineering (SS)",
+        "COMPUTER SCIENCE AND ENGINEERING": "Computer Science and Engineering",
+        "COMPUTER SCIENCE AND ENGINEERING (SS)": "Computer Science and Engineering (SS)",
+        "COMPUTER SCIENCE AND ENGINEERING (AI AND MACHINE LEARNING)": "Computer Science and Engineering (AI and Machine Learning)",
+        "COMPUTER SCIENCE AND ENGINEERING (ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING)": "Computer Science and Engineering (AI and Machine Learning)",
+        "COMPUTER SCIENCE AND ENGINEERING(ARTIFICIAL INTELLIGENCE)": "Computer Science and Engineering (Artificial Intelligence)",
+        "ELECTRICAL AND ELECTRONICS ENGINEERING": "Electrical and Electronics Engineering",
+        "ELECTRICAL AND ELECTRONICS ENGINEERING (SS)": "Electrical and Electronics Engineering (SS)",
+        "ELECTRONICS AND COMMUNICATION ENGINEERING": "Electronics and Communication Engineering",
+        "ELECTRONICS AND COMMUNICATION ENGINEERING (SS)": "Electronics and Communication Engineering (SS)",
+        "ELECTRONICS AND INSTRUMENTATION ENGINEERING": "Electronics and Instrumentation Engineering",
+        "FASHION TECHNOLOGY": "Fashion Technology",
+        "FASHION TECHNOLOGY (SS)": "Fashion Technology (SS)",
+        "FOOD TECHNOLOGY": "Food Technology",
+        "FOOD TECHNOLOGY (SS)": "Food Technology (SS)",
+        "INDUSTRIAL BIO TECHNOLOGY": "Industrial Bio Technology",
+        "INDUSTRIAL BIO TECHNOLOGY (SS)": "Industrial Bio Technology (SS)",
+        "INDUSTRIAL ENGINEERING": "Industrial Engineering",
+        "INFORMATION TECHNOLOGY": "Information Technology",
+        "INFORMATION TECHNOLOGY (SS)": "Information Technology (SS)",
+        "INSTRUMENTATION AND CONTROL ENGINEERING": "Instrumentation and Control Engineering",
+        "INSTRUMENTATION AND CONTROL ENGINEERING (SS)": "Instrumentation and Control Engineering (SS)",
+        "MANUFACTURING ENGINEERING": "Manufacturing Engineering",
+        "MARINE ENGINEERING": "Marine Engineering",
+        "MECHANICAL ENGINEERING": "Mechanical Engineering",
+        "MECHANICAL ENGINEERING (SS)": "Mechanical Engineering (SS)",
+        "MECHATRONICS": "Mechatronics",
+        "METALLURGICAL ENGINEERING": "Metallurgical Engineering",
+        "METALLURGICAL ENGINEERING (SS)": "Metallurgical Engineering (SS)",
+        "PETRO CHEMICAL ENGINEERING": "Petro Chemical Engineering",
+        "PHARMACEUTICAL TECHNOLOGY": "Pharmaceutical Technology",
+        "PHARMACEUTICAL TECHNOLOGY (SS)": "Pharmaceutical Technology (SS)",
+        "PRODUCTION ENGINEERING": "Production Engineering",
+        "PRODUCTION ENGINEERING (SS)": "Production Engineering (SS)",
+        "ROBOTICS AND AUTOMATION": "Robotics and Automation",
+        "ROBOTICS AND AUTOMATION (SS)": "Robotics and Automation (SS)",
+        "TEXTILE TECHNOLOGY": "Textile Technology",
+        "TEXTILE TECHNOLOGY (SS)": "Textile Technology (SS)"
+    }
+    
+    if b_upper in BRANCH_MAP:
+        return BRANCH_MAP[b_upper]
+    return b.title()
+
+def get_college_districts_map(db: Session) -> Dict[int, str]:
+    rows = db.query(College.college_code, College.district).filter(College.college_code.isnot(None)).all()
+    mapping = {}
+    for code_str, dist in rows:
+        if not code_str:
+            continue
+        try:
+            code = int(str(code_str).strip())
+            d_clean = clean_district_name(dist)
+            mapping[code] = d_clean
+        except ValueError:
+            continue
+    return mapping
+
 # --- Dynamic Branch Discovery ---
 # We load all unique branches from the DB to ensure we can match ANY branch
 ALL_BRANCHES = []
@@ -73,7 +178,8 @@ def load_branches():
     try:
         db = SessionLocal()
         branches = db.query(CollegeCutoff.branch_name).distinct().all()
-        ALL_BRANCHES = [b[0].upper() for b in branches if b[0]]
+        # Store clean normalized names
+        ALL_BRANCHES = sorted(list(set(clean_branch_name(b[0]).upper() for b in branches if b[0])))
         print(f"--- Loaded {len(ALL_BRANCHES)} unique branches from database ---")
         db.close()
     except Exception as e:
@@ -81,38 +187,6 @@ def load_branches():
 
 load_branches()
 
-def apply_branch_filter(query, branch_clean: str):
-    if not branch_clean:
-        return query
-    from sqlalchemy import or_, func
-    b_norm = branch_clean.strip().upper()
-    
-    if b_norm in ["IT", "INFORMATION TECHNOLOGY"]:
-        return query.filter(CollegeCutoff.branch_name.ilike("%Information Technology%"))
-    elif b_norm in ["CSE", "CS", "COMPUTER SCIENCE", "COMPUTER SCIENCE AND ENGINEERING"]:
-        return query.filter(or_(
-            CollegeCutoff.branch_name.ilike("%Computer Science%"),
-            CollegeCutoff.branch_name.ilike("%Computer Science and Engineering%"),
-            CollegeCutoff.branch_name.ilike("%Computer Science & Engineering%")
-        ))
-    elif b_norm in ["AIDS", "AD", "AI&DS", "AI-DS", "AI AND DS", "ARTIFICIAL INTELLIGENCE AND DATA SCIENCE"]:
-        return query.filter(or_(
-            CollegeCutoff.branch_name.ilike("%Artificial Intelligence and Data Science%"),
-            CollegeCutoff.branch_name.ilike("%Artificial Intelligence & Data Science%"),
-            CollegeCutoff.branch_name.ilike("%AI%DS%"),
-            CollegeCutoff.branch_name.ilike("%Artificial Intelligence and Data Science (SS)%")
-        ))
-    elif b_norm in ["AIML", "AI&ML", "AI-ML", "AI AND ML", "ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING"]:
-        return query.filter(or_(
-            CollegeCutoff.branch_name.ilike("%Artificial Intelligence and Machine Learning%"),
-            CollegeCutoff.branch_name.ilike("%Artificial Intelligence & Machine Learning%"),
-            CollegeCutoff.branch_name.ilike("%AI%ML%")
-        ))
-    elif b_norm in ["BM", "BME", "BIOMEDICAL", "BIOMEDICAL ENGINEERING", "BIO MEDICAL ENGINEERING"]:
-        return query.filter(or_(
-            CollegeCutoff.branch_name.ilike("%Bio Medical Engineering%"),
-            CollegeCutoff.branch_name.ilike("%Biomedical Engineering%")
-        ))
 def get_branch_filter_condition(branch_clean: str):
     from sqlalchemy import or_, func
     b_norm = branch_clean.strip().upper()
@@ -143,8 +217,21 @@ def get_branch_filter_condition(branch_clean: str):
             CollegeCutoff.branch_name.ilike("%Bio Medical Engineering%"),
             CollegeCutoff.branch_name.ilike("%Biomedical Engineering%")
         )
+    elif b_norm in ["AGRICULTURAL ENGINEERING", "AGRICULTURE ENGINEERING"]:
+        return or_(
+            CollegeCutoff.branch_name.ilike("%Agricultural%Engineering%"),
+            CollegeCutoff.branch_name.ilike("%Agriculture%Engineering%")
+        )
+    elif b_norm in ["COMPUTER SCIENCE AND BUSINESS SYSTEM", "COMPUTER SCIENCE AND BUSSINESS SYSTEM"]:
+        return or_(
+            CollegeCutoff.branch_name.ilike("%Business%"),
+            CollegeCutoff.branch_name.ilike("%Bussiness%")
+        )
     else:
-        return func.replace(CollegeCutoff.branch_name, ".", "").ilike(f"%{branch_clean}%")
+        # Replace spaces with wildcards to ignore double-space and spelling variations in database
+        tokens = b_norm.split()
+        wildcard_pattern = "%" + "%".join(tokens) + "%"
+        return func.replace(CollegeCutoff.branch_name, ".", "").ilike(wildcard_pattern)
 
 # --- Models ---
 class QueryRequest(BaseModel):
@@ -184,7 +271,11 @@ async def recommend_endpoint(request: QueryRequest, db: Session = Depends(get_db
     # Save to session memory
     USER_SESSIONS[request.session_id] = {"cutoff": cutoff, "category": request.category}
 
+    # Load college code to district mapping
+    districts_map = get_college_districts_map(db)
+
     # 1. Primary Search - Prioritize 2025 data, fallback to 2024
+    from sqlalchemy import cast, Integer
     query = db.query(CollegeCutoff).filter((CollegeCutoff.cutoff_2025 > 0) | (CollegeCutoff.cutoff_2024 > 0)).filter(CollegeCutoff.branch_name.isnot(None))
     
     # Normalize input
@@ -195,19 +286,58 @@ async def recommend_endpoint(request: QueryRequest, db: Session = Depends(get_db
     if request.category:
         query = query.filter(CollegeCutoff.category == request.category)
     
-    # Multi-district selection support
-    if request.districts:
-        from sqlalchemy import or_, func
-        dist_conditions = []
-        for d in request.districts:
-            d_clean = d.strip().replace(".", "")
-            if d_clean:
-                dist_conditions.append(func.replace(CollegeCutoff.district, ".", "").ilike(f"%{d_clean}%"))
-        if dist_conditions:
-            query = query.filter(or_(*dist_conditions))
-    elif dist_clean:
-        from sqlalchemy import func
-        query = query.filter(func.replace(CollegeCutoff.district, ".", "").ilike(f"%{dist_clean}%"))
+    # Multi-district selection support (joined against Colleges table to get clean districts)
+    if request.districts or dist_clean:
+        query = query.outerjoin(College, cast(College.college_code, Integer) == CollegeCutoff.college_code)
+        
+        if request.districts:
+            from sqlalchemy import or_
+            dist_conditions = []
+            for d in request.districts:
+                d_clean = d.strip().replace(".", "").upper()
+                if d_clean:
+                    if d_clean in ["CHENGALPATTU", "CHENGALPET"]:
+                        dist_conditions.append(or_(
+                            College.district.ilike("%Chengalpattu%"),
+                            College.district.ilike("%Chengalpet%"),
+                            CollegeCutoff.district.ilike("%Chengalpattu%"),
+                            CollegeCutoff.district.ilike("%Chengalpet%")
+                        ))
+                    elif d_clean in ["KANCHIPURAM", "KANJEERAPURAM"]:
+                        dist_conditions.append(or_(
+                            College.district.ilike("%Kanchipuram%"),
+                            College.district.ilike("%Kancheepuram%"),
+                            CollegeCutoff.district.ilike("%Kanchipuram%"),
+                            CollegeCutoff.district.ilike("%Kancheepuram%")
+                        ))
+                    else:
+                        dist_conditions.append(or_(
+                            College.district.ilike(f"%{d}%"),
+                            CollegeCutoff.district.ilike(f"%{d}%")
+                        ))
+            if dist_conditions:
+                query = query.filter(or_(*dist_conditions))
+        elif dist_clean:
+            d_clean_upper = dist_clean.upper()
+            if d_clean_upper in ["CHENGALPATTU", "CHENGALPET"]:
+                query = query.filter(or_(
+                    College.district.ilike("%Chengalpattu%"),
+                    College.district.ilike("%Chengalpet%"),
+                    CollegeCutoff.district.ilike("%Chengalpattu%"),
+                    CollegeCutoff.district.ilike("%Chengalpet%")
+                ))
+            elif d_clean_upper in ["KANCHIPURAM", "KANJEERAPURAM"]:
+                query = query.filter(or_(
+                    College.district.ilike("%Kanchipuram%"),
+                    College.district.ilike("%Kancheepuram%"),
+                    CollegeCutoff.district.ilike("%Kanchipuram%"),
+                    CollegeCutoff.district.ilike("%Kancheepuram%")
+                ))
+            else:
+                query = query.filter(or_(
+                    College.district.ilike(f"%{dist_clean}%"),
+                    CollegeCutoff.district.ilike(f"%{dist_clean}%")
+                ))
     
     # Multi-branch selection support
     if request.branches:
@@ -246,28 +376,41 @@ async def recommend_endpoint(request: QueryRequest, db: Session = Depends(get_db
             
         results = query.limit(500).all() # Get a large pool for fallback
 
-    # Group by College + Branch to avoid duplicates and show ranges
+    # Group by College + Clean Branch to avoid duplicates and show ranges
     grouped = {}
     for col in results:
-        key = (col.college_name, col.branch_name)
+        b_clean = clean_branch_name(col.branch_name)
+        key = (col.college_name, b_clean)
         if key not in grouped:
             grouped[key] = {
                 "col": col,
+                "branch_name": b_clean,
+                "history": {
+                    "2021": [],
+                    "2022": [],
+                    "2023": [],
+                    "2024": [],
+                    "2025": []
+                },
                 "cutoffs": []
             }
-        # Always store full history for trends, even if latest is missing
-        grouped[key]["history"] = {
-            "2021": col.cutoff_2021,
-            "2022": col.cutoff_2022,
-            "2023": col.cutoff_2023,
-            "2024": col.cutoff_2024,
-            "2025": col.cutoff_2025
-        }
         
-        # Track the latest available cutoff for range calculation
+        # Collect cutoffs for clean merge
+        for yr in ["2021", "2022", "2023", "2024", "2025"]:
+            val = getattr(col, f"cutoff_{yr}")
+            if val is not None and val > 0:
+                grouped[key]["history"][yr].append(val)
+        
+        # Track latest available cutoff
         latest_c = col.cutoff_2025 or col.cutoff_2024 or col.cutoff_2023
         if latest_c:
             grouped[key]["cutoffs"].append(latest_c)
+
+    # Flatten history by taking maximum values
+    for key, data in grouped.items():
+        for yr in ["2021", "2022", "2023", "2024", "2025"]:
+            vals = data["history"][yr]
+            data["history"][yr] = max(vals) if vals else None
 
     recommendations = []
     for (c_name, b_name), data in grouped.items():
@@ -298,12 +441,16 @@ async def recommend_endpoint(request: QueryRequest, db: Session = Depends(get_db
             
         # Format the cutoff display (Single value if same, or Range if different)
         cutoff_display = f"{min_c} - {max_c}" if min_c != max_c else f"{min_c}"
+        
+        # Get clean district name
+        c_code_int = int(col.college_code) if col.college_code else 0
+        clean_dist = districts_map.get(c_code_int, clean_district_name(col.district))
             
         recommendations.append({
-            "college_code": int(col.college_code) if col.college_code else 0,
+            "college_code": c_code_int,
             "college_name": c_name,
-            "branch_name": b_name or "General",
-            "district": col.district,
+            "branch_name": b_name,
+            "district": clean_dist,
             "cutoff": cutoff_display,
             "history": data.get("history", {}),
             "raw_cutoff": max_c,
@@ -892,7 +1039,7 @@ async def get_directory(
     limit: int = Query(50, ge=1),
     db: Session = Depends(get_db)
 ):
-    from sqlalchemy import or_, and_, cast, String, func
+    from sqlalchemy import or_, and_, cast, String, func, Integer
 
     # --- Cache lookup (skip DB entirely for repeated identical requests) ---
     search_norm = (search or "").strip().lower()
@@ -907,7 +1054,7 @@ async def get_directory(
         query = db.query(
             CollegeCutoff.college_code,
             CollegeCutoff.college_name,
-            CollegeCutoff.district,
+            func.coalesce(College.district, CollegeCutoff.district).label("district"),
             CollegeCutoff.branch_name,
             func.min(func.coalesce(
                 CollegeCutoff.cutoff_2025,
@@ -923,7 +1070,7 @@ async def get_directory(
                 CollegeCutoff.cutoff_2022,
                 CollegeCutoff.cutoff_2021
             )).label("max_c")
-        ).filter(
+        ).outerjoin(College, cast(College.college_code, Integer) == CollegeCutoff.college_code).filter(
             CollegeCutoff.branch_name.isnot(None),
             (CollegeCutoff.cutoff_2025 > 0) |
             (CollegeCutoff.cutoff_2024 > 0) |
@@ -939,7 +1086,7 @@ async def get_directory(
                 for token in tokens:
                     token_conds = [
                         CollegeCutoff.college_name.ilike(f"%{token}%"),
-                        CollegeCutoff.district.ilike(f"%{token}%"),
+                        func.coalesce(College.district, CollegeCutoff.district).ilike(f"%{token}%"),
                         cast(CollegeCutoff.college_code, String).ilike(f"%{token}%")
                     ]
                     conditions.append(or_(*token_conds))
@@ -948,9 +1095,27 @@ async def get_directory(
         if districts:
             dist_conditions = []
             for d in districts:
-                d_clean = d.strip().replace(".", "")
+                d_clean = d.strip().replace(".", "").upper()
                 if d_clean:
-                    dist_conditions.append(func.replace(CollegeCutoff.district, ".", "").ilike(f"%{d_clean}%"))
+                    if d_clean in ["CHENGALPATTU", "CHENGALPET"]:
+                        dist_conditions.append(or_(
+                            College.district.ilike("%Chengalpattu%"),
+                            College.district.ilike("%Chengalpet%"),
+                            CollegeCutoff.district.ilike("%Chengalpattu%"),
+                            CollegeCutoff.district.ilike("%Chengalpet%")
+                        ))
+                    elif d_clean in ["KANCHIPURAM", "KANJEERAPURAM"]:
+                        dist_conditions.append(or_(
+                            College.district.ilike("%Kanchipuram%"),
+                            College.district.ilike("%Kancheepuram%"),
+                            CollegeCutoff.district.ilike("%Kanchipuram%"),
+                            CollegeCutoff.district.ilike("%Kancheepuram%")
+                        ))
+                    else:
+                        dist_conditions.append(or_(
+                            College.district.ilike(f"%{d}%"),
+                            CollegeCutoff.district.ilike(f"%{d}%")
+                        ))
             if dist_conditions:
                 query = query.filter(or_(*dist_conditions))
 
@@ -976,12 +1141,19 @@ async def get_directory(
             if code not in directory:
                 directory[code] = {
                     "name": name,
-                    "district": district or "Tamil Nadu",
+                    "district": clean_district_name(district),
                     "code": code,
                     "branches": {}
                 }
             if branch and min_c is not None and max_c is not None:
-                directory[code]["branches"][branch] = {"min": min_c, "max": max_c}
+                b_cleaned = clean_branch_name(branch)
+                if b_cleaned in directory[code]["branches"]:
+                    old_min = directory[code]["branches"][b_cleaned]["min"]
+                    old_max = directory[code]["branches"][b_cleaned]["max"]
+                    directory[code]["branches"][b_cleaned]["min"] = min(old_min, min_c)
+                    directory[code]["branches"][b_cleaned]["max"] = max(old_max, max_c)
+                else:
+                    directory[code]["branches"][b_cleaned] = {"min": min_c, "max": max_c}
 
         result = []
         for item in directory.values():
@@ -1012,17 +1184,25 @@ async def get_directory(
 
 @app.get("/metadata")
 async def get_metadata(db: Session = Depends(get_db)):
-    # Query all unique non-null districts and branches
-    districts = db.query(CollegeCutoff.district).filter(CollegeCutoff.district.isnot(None)).distinct().all()
+    # Query all unique non-null actual districts from College table
+    districts = db.query(College.district).filter(College.district.isnot(None)).distinct().all()
     branches = db.query(CollegeCutoff.branch_name).filter(CollegeCutoff.branch_name.isnot(None)).distinct().all()
     
-    # Sort and clean
-    cleaned_districts = sorted(list(set(d[0].strip().upper() for d in districts if d[0])))
-    cleaned_branches = sorted(list(set(b[0].strip().upper() for b in branches if b[0])))
+    # Clean districts to include only clean district names, no places/taluks
+    cleaned_districts = set()
+    for d in districts:
+        if d[0]:
+            cleaned_districts.add(clean_district_name(d[0]))
+            
+    # Clean and deduplicate branches (e.g. merge Agricultural vs Agriculture Engineering)
+    cleaned_branches = set()
+    for b in branches:
+        if b[0]:
+            cleaned_branches.add(clean_branch_name(b[0]))
     
     return {
-        "districts": [d.title() for d in cleaned_districts],
-        "branches": [b.title() for b in cleaned_branches]
+        "districts": sorted(list(cleaned_districts)),
+        "branches": sorted(list(cleaned_branches))
     }
 
 

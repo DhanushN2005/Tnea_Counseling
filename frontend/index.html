@@ -18,42 +18,49 @@
 
     <div class="app-container">
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
+            <button id="sidebar-close" class="sidebar-close-btn" aria-label="Close Menu">
+                <i class="fas fa-times"></i>
+            </button>
             <div class="logo-section">
                 <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
                 <h1>TNEA PRO <span>AI</span></h1>
             </div>
             
-            <div class="theme-toggle-container">
-                <button id="theme-toggle" class="nav-item theme-btn">
-                    <span class="icon"><i class="fas fa-moon"></i></span>
-                    <span class="label">Dark Mode</span>
-                </button>
+            <div class="theme-switch-wrapper">
+                <span class="theme-switch-label">Theme Mode</span>
+                <div class="theme-switch-container">
+                    <span class="theme-switch-icon sun-icon" title="Light Mode"><i class="fas fa-sun"></i></span>
+                    <button type="button" id="theme-toggle-btn" class="theme-switch-toggle" role="switch" aria-checked="true" aria-label="Toggle Theme">
+                        <span class="theme-switch-thumb"></span>
+                    </button>
+                    <span class="theme-switch-icon moon-icon" title="Dark Mode"><i class="fas fa-moon"></i></span>
+                </div>
             </div>
 
-            <nav class="nav-menu">
-                <button class="nav-item active" data-tab="chat">
+            <nav class="nav-menu" role="tablist" aria-label="Main Navigation Menu">
+                <button class="nav-item active" data-tab="chat" role="tab" aria-selected="true" aria-controls="chat-view">
                     <span class="icon"><i class="fas fa-comment-dots"></i></span>
                     <span class="label">Counselling Expert</span>
                 </button>
-                <button class="nav-item" data-tab="cutoff-calculator">
+                <button class="nav-item" data-tab="cutoff-calculator" role="tab" aria-selected="false" aria-controls="cutoff-calculator-view">
                     <span class="icon"><i class="fas fa-calculator"></i></span>
                     <span class="label">Cutoff Calculator</span>
                 </button>
-                <button class="nav-item" data-tab="finder">
+                <button class="nav-item" data-tab="finder" role="tab" aria-selected="false" aria-controls="finder-view">
                     <span class="icon"><i class="fas fa-search-location"></i></span>
                     <span class="label">College Finder</span>
                 </button>
-                <button class="nav-item" data-tab="directory">
+                <button class="nav-item" data-tab="directory" role="tab" aria-selected="false" aria-controls="directory-view">
                     <span class="icon"><i class="fas fa-list-ul"></i></span>
                     <span class="label">College Directory</span>
                 </button>
-                <button class="nav-item" data-tab="choices">
+                <button class="nav-item" data-tab="choices" role="tab" aria-selected="false" aria-controls="choices-view">
                     <span class="icon"><i class="fas fa-clipboard-list"></i></span>
                     <span class="label">My Choice List</span>
                     <span id="choice-count" class="badge">0</span>
                 </button>
-                <button class="nav-item" data-tab="tfc">
+                <button class="nav-item" data-tab="tfc" role="tab" aria-selected="false" aria-controls="tfc-view">
                     <span class="icon"><i class="fas fa-map-marker-alt"></i></span>
                     <span class="label">TFC Centers</span>
                 </button>
@@ -485,6 +492,9 @@
 
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container"></div>
+
+    <!-- Sidebar Mobile Backdrop Overlay -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 
     <script src="script.js"></script>
 </body>

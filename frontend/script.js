@@ -59,55 +59,79 @@ function initTheme() {
     if (savedTheme === "light") {
         document.body.classList.add("light-theme");
         updateThemeUI(true);
+    } else {
+        updateThemeUI(false);
     }
 }
 
 function updateThemeUI(isLight) {
-    const btn = document.getElementById("theme-toggle");
+    const btn = document.getElementById("theme-toggle-btn");
     if (!btn) return;
-    const icon = btn.querySelector("i");
-    const label = btn.querySelector(".label");
-    
-    if (isLight) {
-        icon.className = "fas fa-sun";
-        label.textContent = "Light Mode";
-    } else {
-        icon.className = "fas fa-moon";
-        label.textContent = "Dark Mode";
-    }
+    btn.setAttribute("aria-checked", isLight ? "false" : "true");
+}
+
+function openMobileSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+    if (sidebar) sidebar.classList.add("open");
+    if (sidebarBackdrop) sidebarBackdrop.classList.add("active");
+    document.body.style.overflow = "hidden"; // Prevent scrolling behind sidebar
+}
+
+function closeMobileSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+    if (sidebar) sidebar.classList.remove("open");
+    if (sidebarBackdrop) sidebarBackdrop.classList.remove("active");
+    document.body.style.overflow = ""; // Restore scrolling
 }
 
 function setupEventListeners() {
-    // Theme Toggle
-    document.getElementById("theme-toggle").addEventListener("click", () => {
-        const isLight = document.body.classList.toggle("light-theme");
-        localStorage.setItem("theme", isLight ? "light" : "dark");
-        updateThemeUI(isLight);
-    });
+    // Theme Toggle Switch
+    const themeBtn = document.getElementById("theme-toggle-btn");
+    if (themeBtn) {
+        themeBtn.addEventListener("click", () => {
+            const isLight = document.body.classList.toggle("light-theme");
+            localStorage.setItem("theme", isLight ? "light" : "dark");
+            updateThemeUI(isLight);
+        });
+    }
 
     // Navigation
-    const sidebar = document.querySelector(".sidebar");
     document.querySelectorAll(".nav-item").forEach(item => {
         item.addEventListener("click", () => {
-            if (item.id === "theme-toggle") return;
             document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("active"));
             item.classList.add("active");
             switchTab(item.dataset.tab);
             
             // Mobile close
             if (window.innerWidth <= 1024) {
-                sidebar.classList.remove("open");
+                closeMobileSidebar();
             }
         });
     });
 
-    // Mobile Sidebar Toggle
+    // Mobile Sidebar Drawer Actions
     const mobileToggle = document.getElementById("mobile-toggle");
+    const sidebarClose = document.getElementById("sidebar-close");
+    const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+    
     if (mobileToggle) {
-        mobileToggle.addEventListener("click", () => {
-            sidebar.classList.toggle("open");
-        });
+        mobileToggle.addEventListener("click", openMobileSidebar);
     }
+    if (sidebarClose) {
+        sidebarClose.addEventListener("click", closeMobileSidebar);
+    }
+    if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener("click", closeMobileSidebar);
+    }
+
+    // Close mobile drawer on resize past breakpoint
+    window.addEventListener("resize", () => {
+        if (window.innerWidth > 1024) {
+            closeMobileSidebar();
+        }
+    });
 
     // Chat
     document.getElementById("send-btn").addEventListener("click", sendMessage);
@@ -510,8 +534,10 @@ function switchTab(tabId) {
     document.querySelectorAll(".nav-item").forEach(item => {
         if (item.dataset.tab === tabId) {
             item.classList.add("active");
+            item.setAttribute("aria-selected", "true");
         } else {
             item.classList.remove("active");
+            item.setAttribute("aria-selected", "false");
         }
     });
 
