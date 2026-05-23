@@ -1,12 +1,14 @@
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
+import time
 import ollama
 import torch
 from sqlalchemy.orm import Session
-from .database import SessionLocal, College, TFCCenter
+from .database import SessionLocal, College, TFCCenter, Contact, Course, HostelDetails, TransportDetails, CollegeCutoff
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 import os
@@ -31,6 +33,25 @@ app.add_middleware(
 USER_SESSIONS: Dict[str, dict] = {} # {session_id: {cutoff, category, choices: []}}
 USER_CHOICES: Dict[str, List[dict]] = {} # {session_id: [choice_data]}
 
+# --- Directory response cache (TTL = 300 seconds) ---
+# Key: (search, tuple(sorted districts), tuple(sorted branches))
+# Value: {"ts": float, "result": List[dict]}
+_DIRECTORY_CACHE: Dict[tuple, dict] = {}
+_DIRECTORY_CACHE_TTL = 300  # seconds
+
+def _get_directory_cache(key: tuple):
+    entry = _DIRECTORY_CACHE.get(key)
+    if entry and (time.time() - entry["ts"]) < _DIRECTORY_CACHE_TTL:
+        return entry["result"]
+    return None
+
+def _set_directory_cache(key: tuple, result: list):
+    _DIRECTORY_CACHE[key] = {"ts": time.time(), "result": result}
+    # Keep cache small — evict if too many keys
+    if len(_DIRECTORY_CACHE) > 200:
+        oldest = min(_DIRECTORY_CACHE, key=lambda k: _DIRECTORY_CACHE[k]["ts"])
+        del _DIRECTORY_CACHE[oldest]
+
 # --- GPU & Embeddings ---
 # FORCE CPU for embeddings to save VRAM for Ollama (llama3)
 # This prevents the "Ollama GPU/Memory Error" on most systems.
@@ -51,7 +72,7 @@ def load_branches():
     global ALL_BRANCHES
     try:
         db = SessionLocal()
-        branches = db.query(College.branch_name).distinct().all()
+        branches = db.query(CollegeCutoff.branch_name).distinct().all()
         ALL_BRANCHES = [b[0].upper() for b in branches if b[0]]
         print(f"--- Loaded {len(ALL_BRANCHES)} unique branches from database ---")
         db.close()
@@ -67,33 +88,63 @@ def apply_branch_filter(query, branch_clean: str):
     b_norm = branch_clean.strip().upper()
     
     if b_norm in ["IT", "INFORMATION TECHNOLOGY"]:
-        return query.filter(College.branch_name.ilike("%Information Technology%"))
+        return query.filter(CollegeCutoff.branch_name.ilike("%Information Technology%"))
     elif b_norm in ["CSE", "CS", "COMPUTER SCIENCE", "COMPUTER SCIENCE AND ENGINEERING"]:
         return query.filter(or_(
-            College.branch_name.ilike("%Computer Science%"),
-            College.branch_name.ilike("%Computer Science and Engineering%"),
-            College.branch_name.ilike("%Computer Science & Engineering%")
+            CollegeCutoff.branch_name.ilike("%Computer Science%"),
+            CollegeCutoff.branch_name.ilike("%Computer Science and Engineering%"),
+            CollegeCutoff.branch_name.ilike("%Computer Science & Engineering%")
         ))
     elif b_norm in ["AIDS", "AD", "AI&DS", "AI-DS", "AI AND DS", "ARTIFICIAL INTELLIGENCE AND DATA SCIENCE"]:
         return query.filter(or_(
-            College.branch_name.ilike("%Artificial Intelligence and Data Science%"),
-            College.branch_name.ilike("%Artificial Intelligence & Data Science%"),
-            College.branch_name.ilike("%AI%DS%"),
-            College.branch_name.ilike("%Artificial Intelligence and Data Science (SS)%")
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence and Data Science%"),
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence & Data Science%"),
+            CollegeCutoff.branch_name.ilike("%AI%DS%"),
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence and Data Science (SS)%")
         ))
     elif b_norm in ["AIML", "AI&ML", "AI-ML", "AI AND ML", "ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING"]:
         return query.filter(or_(
-            College.branch_name.ilike("%Artificial Intelligence and Machine Learning%"),
-            College.branch_name.ilike("%Artificial Intelligence & Machine Learning%"),
-            College.branch_name.ilike("%AI%ML%")
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence and Machine Learning%"),
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence & Machine Learning%"),
+            CollegeCutoff.branch_name.ilike("%AI%ML%")
         ))
     elif b_norm in ["BM", "BME", "BIOMEDICAL", "BIOMEDICAL ENGINEERING", "BIO MEDICAL ENGINEERING"]:
         return query.filter(or_(
-            College.branch_name.ilike("%Bio Medical Engineering%"),
-            College.branch_name.ilike("%Biomedical Engineering%")
+            CollegeCutoff.branch_name.ilike("%Bio Medical Engineering%"),
+            CollegeCutoff.branch_name.ilike("%Biomedical Engineering%")
         ))
+def get_branch_filter_condition(branch_clean: str):
+    from sqlalchemy import or_, func
+    b_norm = branch_clean.strip().upper()
+    
+    if b_norm in ["IT", "INFORMATION TECHNOLOGY"]:
+        return CollegeCutoff.branch_name.ilike("%Information Technology%")
+    elif b_norm in ["CSE", "CS", "COMPUTER SCIENCE", "COMPUTER SCIENCE AND ENGINEERING"]:
+        return or_(
+            CollegeCutoff.branch_name.ilike("%Computer Science%"),
+            CollegeCutoff.branch_name.ilike("%Computer Science and Engineering%"),
+            CollegeCutoff.branch_name.ilike("%Computer Science & Engineering%")
+        )
+    elif b_norm in ["AIDS", "AD", "AI&DS", "AI-DS", "AI AND DS", "ARTIFICIAL INTELLIGENCE AND DATA SCIENCE"]:
+        return or_(
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence and Data Science%"),
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence & Data Science%"),
+            CollegeCutoff.branch_name.ilike("%AI%DS%"),
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence and Data Science (SS)%")
+        )
+    elif b_norm in ["AIML", "AI&ML", "AI-ML", "AI AND ML", "ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING"]:
+        return or_(
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence and Machine Learning%"),
+            CollegeCutoff.branch_name.ilike("%Artificial Intelligence & Machine Learning%"),
+            CollegeCutoff.branch_name.ilike("%AI%ML%")
+        )
+    elif b_norm in ["BM", "BME", "BIOMEDICAL", "BIOMEDICAL ENGINEERING", "BIO MEDICAL ENGINEERING"]:
+        return or_(
+            CollegeCutoff.branch_name.ilike("%Bio Medical Engineering%"),
+            CollegeCutoff.branch_name.ilike("%Biomedical Engineering%")
+        )
     else:
-        return query.filter(func.replace(College.branch_name, ".", "").ilike(f"%{branch_clean}%"))
+        return func.replace(CollegeCutoff.branch_name, ".", "").ilike(f"%{branch_clean}%")
 
 # --- Models ---
 class QueryRequest(BaseModel):
@@ -103,6 +154,8 @@ class QueryRequest(BaseModel):
     cutoff: Optional[float] = 0.0
     district: Optional[str] = None
     branch: Optional[str] = None
+    districts: Optional[List[str]] = None
+    branches: Optional[List[str]] = None
 
 class RecommendationResponse(BaseModel):
     college_code: int
@@ -132,7 +185,7 @@ async def recommend_endpoint(request: QueryRequest, db: Session = Depends(get_db
     USER_SESSIONS[request.session_id] = {"cutoff": cutoff, "category": request.category}
 
     # 1. Primary Search - Prioritize 2025 data, fallback to 2024
-    query = db.query(College).filter((College.cutoff_2025 > 0) | (College.cutoff_2024 > 0)).filter(College.branch_name.isnot(None))
+    query = db.query(CollegeCutoff).filter((CollegeCutoff.cutoff_2025 > 0) | (CollegeCutoff.cutoff_2024 > 0)).filter(CollegeCutoff.branch_name.isnot(None))
     
     # Normalize input
     dist_clean = request.district.strip().replace(".", "") if request.district else ""
@@ -140,26 +193,57 @@ async def recommend_endpoint(request: QueryRequest, db: Session = Depends(get_db
     
     # Apply filters if provided
     if request.category:
-        query = query.filter(College.category == request.category)
+        query = query.filter(CollegeCutoff.category == request.category)
     
-    if dist_clean:
-        # SQL normalization: Remove dots from district name during comparison
+    # Multi-district selection support
+    if request.districts:
+        from sqlalchemy import or_, func
+        dist_conditions = []
+        for d in request.districts:
+            d_clean = d.strip().replace(".", "")
+            if d_clean:
+                dist_conditions.append(func.replace(CollegeCutoff.district, ".", "").ilike(f"%{d_clean}%"))
+        if dist_conditions:
+            query = query.filter(or_(*dist_conditions))
+    elif dist_clean:
         from sqlalchemy import func
-        query = query.filter(func.replace(College.district, ".", "").ilike(f"%{dist_clean}%"))
+        query = query.filter(func.replace(CollegeCutoff.district, ".", "").ilike(f"%{dist_clean}%"))
     
-    if branch_clean:
-        query = apply_branch_filter(query, branch_clean)
+    # Multi-branch selection support
+    if request.branches:
+        from sqlalchemy import or_
+        branch_conditions = []
+        for b in request.branches:
+            b_clean = b.strip().upper().replace(".", "")
+            if b_clean:
+                branch_conditions.append(get_branch_filter_condition(b_clean))
+        if branch_conditions:
+            query = query.filter(or_(*branch_conditions))
+    elif branch_clean:
+        query = query.filter(get_branch_filter_condition(branch_clean))
     
     results = query.all()
     print(f"DEBUG: Found {len(results)} total matching records for processing.")
 
     # 2. Relaxed Fallback (If no results in district, search statewide)
-    if not results and request.district:
+    if not results and (request.district or request.districts):
         print(f"DEBUG: Falling back to statewide search.")
-        query = db.query(College).filter(College.cutoff_2023 > 0)
-        if request.category: query = query.filter(College.category == request.category)
-        if branch_clean:
-            query = apply_branch_filter(query, branch_clean)
+        query = db.query(CollegeCutoff).filter(CollegeCutoff.cutoff_2023 > 0)
+        if request.category: query = query.filter(CollegeCutoff.category == request.category)
+        
+        # Apply branch filters for fallback
+        if request.branches:
+            from sqlalchemy import or_
+            branch_conditions = []
+            for b in request.branches:
+                b_clean = b.strip().upper().replace(".", "")
+                if b_clean:
+                    branch_conditions.append(get_branch_filter_condition(b_clean))
+            if branch_conditions:
+                query = query.filter(or_(*branch_conditions))
+        elif branch_clean:
+            query = query.filter(get_branch_filter_condition(branch_clean))
+            
         results = query.limit(500).all() # Get a large pool for fallback
 
     # Group by College + Branch to avoid duplicates and show ranges
@@ -322,11 +406,11 @@ async def chat_endpoint(request: QueryRequest, db: Session = Depends(get_db)):
         from sqlalchemy import func
         matches = []
         for word in selective_words[:5]:  # limit to first 5 meaningful words
-            q_sql = db.query(College).filter(
-                func.replace(College.college_name, ".", "").ilike(f"%{word}%")
+            q_sql = db.query(CollegeCutoff).filter(
+                func.replace(CollegeCutoff.college_name, ".", "").ilike(f"%{word}%")
             )
             if branch_filter:
-                q_sql = q_sql.filter(College.branch_name.ilike(f"%{branch_filter}%"))
+                q_sql = q_sql.filter(CollegeCutoff.branch_name.ilike(f"%{branch_filter}%"))
             matches.extend(q_sql.limit(400).all())
             if len(matches) >= 1500:
                 break
@@ -498,134 +582,447 @@ Please answer directly and helpfully. If the context has relevant data, use it p
         "sources": citations,
         "strategy_alert": strategy_alert
     }
-
-@app.get("/college/{code}")
-async def get_college_profile(code: int, db: Session = Depends(get_db)):
-    colleges = db.query(College).filter(College.college_code == code).filter(College.branch_name.isnot(None)).all()
-    if not colleges:
-        # Fallback to Chroma search if not in SQL
-        docs = vector_db.similarity_search(f"College Code: {code}", k=1)
-        if not docs:
-            # Just return a skeleton if absolutely nothing is found
-            return {
-                "name": "Unknown College",
-                "code": code,
-                "district": "Unknown",
-                "category_type": "N/A",
-                "branches": {},
-                "historical_trends": ["No data available for this college code."]
-            }
+def get_or_create_college(college_code: str, db: Session) -> Optional[College]:
+    # Normalize college code to 4-digit string
+    code_str = str(college_code).strip().zfill(4)
+    
+    college = db.query(College).filter(College.college_code == code_str).first()
+    if college:
+        return college
         
-    # Get historical data from RAG (Handling both string and int metadata)
-    rag_docs = vector_db.similarity_search(f"Historical data for college code {code}", k=15)
-    historical_notes = [d.page_content for d in rag_docs if str(d.metadata.get('college_code')) == str(code)]
+    # Fallback search by code as an integer
+    try:
+        code_int = int(college_code)
+        college = db.query(College).filter(College.college_code == str(code_int).zfill(4)).first()
+        if college:
+            return college
+    except ValueError:
+        pass
+
+    # Fallback to check if it exists in Cutoffs database, and if so, dynamically heal/create master record
+    try:
+        code_val = int(code_str)
+    except ValueError:
+        code_val = None
+        
+    cutoff_record = None
+    if code_val is not None:
+        cutoff_record = db.query(CollegeCutoff).filter(
+            (CollegeCutoff.college_code == code_val) | 
+            (CollegeCutoff.college_code == code_str)
+        ).filter(CollegeCutoff.branch_name.isnot(None)).first()
+    else:
+        cutoff_record = db.query(CollegeCutoff).filter(
+            CollegeCutoff.college_code == code_str
+        ).filter(CollegeCutoff.branch_name.isnot(None)).first()
+        
+    if cutoff_record:
+        # Dynamically seed/create master record to prevent 404
+        college = College(
+            college_code=code_str,
+            college_name=cutoff_record.college_name,
+            district=cutoff_record.district,
+            autonomous_status=False,
+            minority_status=False,
+            principal_name="Not Available",
+            address="Address details not available in JSON source.",
+            taluk="N/A",
+            pincode="N/A",
+            parse_confidence=0.5
+        )
+        db.add(college)
+        db.commit()
+        db.refresh(college)
+        
+        # Create empty contacts, hostel, transport
+        contact = Contact(college_id=college.id, phone="", email="", website="", anti_ragging_phone="")
+        hostel = HostelDetails(
+            college_id=college.id, 
+            boys_hostel_available=False, 
+            girls_hostel_available=False,
+            mess_bill=0.0,
+            room_rent=0.0,
+            electricity_charges=0.0,
+            caution_deposit=0.0,
+            establishment_charges=0.0
+        )
+        transport = TransportDetails(
+            college_id=college.id, 
+            facilities_available=False,
+            min_transport_charges=0.0,
+            max_transport_charges=0.0,
+            nearest_railway_station="Not Specified",
+            railway_distance_km=0.0
+        )
+        db.add(contact)
+        db.add(hostel)
+        db.add(transport)
+        
+        # Seed courses from CollegeCutoff branch names for complete robust views
+        cutoff_branches = db.query(CollegeCutoff.branch_name).filter(
+            (CollegeCutoff.college_code == code_val) | 
+            (CollegeCutoff.college_code == code_str)
+        ).filter(CollegeCutoff.branch_name.isnot(None)).distinct().all()
+        
+        for (b_name,) in cutoff_branches:
+            if not b_name:
+                continue
+            words = [w for w in b_name.split() if w.isalnum()]
+            if len(words) >= 3:
+                b_code = "".join([w[0] for w in words])[:4].upper()
+            elif len(words) == 2:
+                b_code = (words[0][:2] + words[1][:2]).upper()
+            else:
+                b_code = words[0][:4].upper() if words else "GEN"
+                
+            course = Course(
+                college_id=college.id,
+                branch_code=b_code,
+                branch_name=b_name,
+                approved_intake=60,
+                year_started=None,
+                accredited=False,
+                accredited_valid_upto="-"
+            )
+            db.add(course)
+            
+        db.commit()
+        db.refresh(college)
+        return college
+    return None
+
+@app.get("/college/search")
+async def search_colleges(
+    district: Optional[str] = None,
+    branch: Optional[str] = None,
+    name: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(College)
     
-    first = colleges[0] if colleges else None
-    profile = {
-        "name": first.college_name if first else "TNEA College",
-        "code": code,
-        "district": first.district if first else "Various",
-        "category_type": first.category if first else "Government/SF",
-        "branches": {},
-        "historical_trends": historical_notes
-    }
+    if district:
+        query = query.filter(College.district.ilike(f"%{district.strip()}%"))
     
-    for col in colleges:
+    if name:
+        query = query.filter(College.college_name.ilike(f"%{name.strip()}%"))
+        
+    if branch:
+        # Join with Course table to search by branch/course name or code
+        query = query.join(Course).filter(
+            (Course.branch_name.ilike(f"%{branch.strip()}%")) | 
+            (Course.branch_code.ilike(f"%{branch.strip()}%"))
+        )
+        
+    colleges = query.distinct().limit(100).all()
+    
+    results = []
+    for c in colleges:
+        contact = db.query(Contact).filter(Contact.college_id == c.id).first()
+        results.append({
+            "college_code": c.college_code,
+            "college_name": c.college_name,
+            "district": c.district,
+            "autonomous_status": c.autonomous_status,
+            "website": contact.website if contact else ""
+        })
+        
+    return results
+
+@app.get("/college/{college_code}")
+async def get_college_profile(college_code: str, db: Session = Depends(get_db)):
+    # Normalize college code to 4-digit string
+    code_str = str(college_code).strip().zfill(4)
+    
+    college = get_or_create_college(code_str, db)
+    if not college:
+        raise HTTPException(status_code=404, detail="College not found")
+
+    # Fetch related details
+    contact = db.query(Contact).filter(Contact.college_id == college.id).first()
+    hostel = db.query(HostelDetails).filter(HostelDetails.college_id == college.id).first()
+    transport = db.query(TransportDetails).filter(TransportDetails.college_id == college.id).first()
+    courses = db.query(Course).filter(Course.college_id == college.id).all()
+    
+    # Query cutoff trends for this college code
+    try:
+        code_val = int(code_str)
+    except ValueError:
+        code_val = code_str
+
+    cutoffs = db.query(CollegeCutoff).filter(
+        (CollegeCutoff.college_code == code_val) | 
+        (CollegeCutoff.college_code == code_str)
+    ).all()
+
+    # Get historical notes from Vector DB
+    try:
+        rag_docs = vector_db.similarity_search(f"Historical data for college code {code_str}", k=10)
+        historical_notes = [d.page_content for d in rag_docs if str(d.metadata.get('college_code')) == str(code_val)]
+    except Exception:
+        historical_notes = []
+
+    # Map branches cutoff history
+    branches_cutoff = {}
+    for col in cutoffs:
         b_name = col.branch_name or "General"
-        if b_name not in profile["branches"]:
-            profile["branches"][b_name] = {}
+        if b_name not in branches_cutoff:
+            branches_cutoff[b_name] = {}
         
         cat = col.category
-        profile["branches"][b_name][cat] = {
+        branches_cutoff[b_name][cat] = {
             "2021": round(col.cutoff_2021, 2) if col.cutoff_2021 else None,
             "2022": round(col.cutoff_2022, 2) if col.cutoff_2022 else None,
             "2023": round(col.cutoff_2023, 2) if col.cutoff_2023 else None,
             "2024": round(col.cutoff_2024, 2) if col.cutoff_2024 else None,
             "2025": round(col.cutoff_2025, 2) if col.cutoff_2025 else None,
         }
-            
-    return profile
+
+    return {
+        "id": college.id,
+        "code": college.college_code,
+        "name": college.college_name,
+        "principal_name": college.principal_name,
+        "address": college.address,
+        "district": college.district,
+        "taluk": college.taluk,
+        "pincode": college.pincode,
+        "autonomous_status": college.autonomous_status,
+        "minority_status": college.minority_status,
+        "parse_confidence": college.parse_confidence,
+        "category_type": "Autonomous" if college.autonomous_status else "Non-Autonomous",
+        "contact": {
+            "phone": contact.phone if contact else "",
+            "email": contact.email if contact else "",
+            "website": contact.website if contact else "",
+            "anti_ragging_phone": contact.anti_ragging_phone if contact else ""
+        },
+        "hostel": {
+            "boys_hostel_available": hostel.boys_hostel_available if hostel else False,
+            "girls_hostel_available": hostel.girls_hostel_available if hostel else False,
+            "mess_bill": hostel.mess_bill if hostel else 0.0,
+            "room_rent": hostel.room_rent if hostel else 0.0,
+            "electricity_charges": hostel.electricity_charges if hostel else 0.0,
+            "caution_deposit": hostel.caution_deposit if hostel else 0.0,
+            "establishment_charges": hostel.establishment_charges if hostel else 0.0
+        },
+        "transport": {
+            "facilities_available": transport.facilities_available if transport else False,
+            "min_transport_charges": transport.min_transport_charges if transport else 0.0,
+            "max_transport_charges": transport.max_transport_charges if transport else 0.0,
+            "nearest_railway_station": transport.nearest_railway_station if transport else "",
+            "railway_distance_km": transport.railway_distance_km if transport else 0.0
+        },
+        "courses": [
+            {
+                "branch_code": c.branch_code,
+                "branch_name": c.branch_name,
+                "approved_intake": c.approved_intake,
+                "year_started": c.year_started,
+                "accredited": c.accredited,
+                "accredited_valid_upto": c.accredited_valid_upto
+            } for c in courses
+        ],
+        "branches": branches_cutoff,
+        "historical_trends": historical_notes
+    }
+
+@app.get("/college/{college_code}/courses")
+async def get_college_courses(college_code: str, db: Session = Depends(get_db)):
+    code_str = str(college_code).strip().zfill(4)
+    college = get_or_create_college(code_str, db)
+    if not college:
+        raise HTTPException(status_code=404, detail="College not found")
+    courses = db.query(Course).filter(Course.college_id == college.id).all()
+    return [
+        {
+            "branch_code": c.branch_code,
+            "branch_name": c.branch_name,
+            "approved_intake": c.approved_intake,
+            "year_started": c.year_started,
+            "accredited": c.accredited,
+            "accredited_valid_upto": c.accredited_valid_upto
+        } for c in courses
+    ]
+
+@app.get("/college/{college_code}/hostel")
+async def get_college_hostel(college_code: str, db: Session = Depends(get_db)):
+    code_str = str(college_code).strip().zfill(4)
+    college = get_or_create_college(code_str, db)
+    if not college:
+        raise HTTPException(status_code=404, detail="College not found")
+    hostel = db.query(HostelDetails).filter(HostelDetails.college_id == college.id).first()
+    if not hostel:
+        return {"boys_hostel_available": False, "girls_hostel_available": False, "mess_bill": 0, "room_rent": 0, "electricity_charges": 0, "caution_deposit": 0, "establishment_charges": 0}
+    return {
+        "boys_hostel_available": hostel.boys_hostel_available,
+        "girls_hostel_available": hostel.girls_hostel_available,
+        "mess_bill": hostel.mess_bill,
+        "room_rent": hostel.room_rent,
+        "electricity_charges": hostel.electricity_charges,
+        "caution_deposit": hostel.caution_deposit,
+        "establishment_charges": hostel.establishment_charges
+    }
+
+@app.get("/college/{college_code}/transport")
+async def get_college_transport(college_code: str, db: Session = Depends(get_db)):
+    code_str = str(college_code).strip().zfill(4)
+    college = get_or_create_college(code_str, db)
+    if not college:
+        raise HTTPException(status_code=404, detail="College not found")
+    transport = db.query(TransportDetails).filter(TransportDetails.college_id == college.id).first()
+    if not transport:
+        return {"facilities_available": False, "min_transport_charges": 0, "max_transport_charges": 0, "nearest_railway_station": "", "railway_distance_km": 0}
+    return {
+        "facilities_available": transport.facilities_available,
+        "min_transport_charges": transport.min_transport_charges,
+        "max_transport_charges": transport.max_transport_charges,
+        "nearest_railway_station": transport.nearest_railway_station,
+        "railway_distance_km": transport.railway_distance_km
+    }
+
 
 
 @app.get("/directory")
-async def get_directory(search: Optional[str] = None, db: Session = Depends(get_db)):
-    from sqlalchemy import or_, and_, cast, String
-    
-    branch_map = {
-        "aids": ["artificial intelligence and data science", "ai&ds", "ai-ds", "ai and ds"],
-        "aiml": ["artificial intelligence and machine learning", "ai&ml", "ai-ml", "ai and ml"],
-        "cse": ["computer science", "computer science and engineering", "computer science & engineering"],
-        "cs": ["computer science", "computer science and engineering", "computer science & engineering"],
-        "it": ["information technology"],
-        "ece": ["electronics and communication engineering", "electronics & communication engineering"],
-        "eee": ["electrical and electronics engineering", "electrical & electronics engineering"],
-        "mech": ["mechanical engineering"],
-        "civil": ["civil engineering"],
-        "bme": ["bio medical engineering", "biomedical engineering"],
-        "bm": ["bio medical engineering", "biomedical engineering"],
-        "aero": ["aeronautical engineering"],
-        "auto": ["automobile engineering"],
-        "biotech": ["biotechnology"]
-    }
-    
-    query = db.query(College).filter(College.branch_name.isnot(None))
-    
-    if search:
-        tokens = search.strip().lower().split()
-        if tokens:
-            conditions = []
-            for token in tokens:
-                token_conds = [
-                    College.college_name.ilike(f"%{token}%"),
-                    College.district.ilike(f"%{token}%"),
-                    cast(College.college_code, String).ilike(f"%{token}%")
-                ]
-                conditions.append(or_(*token_conds))
-            
-            query = query.filter(and_(*conditions))
-            colleges = query.order_by(College.college_name).limit(1500).all()
-    else:
-        # Default representative subset to make initial load instant
-        colleges = query.order_by(College.college_name).limit(500).all()
-        
-    directory = {}
-    for col in colleges:
-        code = col.college_code
-        if not code:
-            continue
-        if code not in directory:
-            directory[code] = {
-                "name": col.college_name,
-                "district": col.district,
-                "code": code,
-                "branches": {}
-            }
-        
-        branch = col.branch_name or "General"
-        latest_cutoff = col.cutoff_2025 or col.cutoff_2024 or col.cutoff_2023 or col.cutoff_2022 or col.cutoff_2021
-        
-        if latest_cutoff:
-            if branch not in directory[code]["branches"]:
-                directory[code]["branches"][branch] = {"min": latest_cutoff, "max": latest_cutoff}
-            else:
-                directory[code]["branches"][branch]["min"] = min(directory[code]["branches"][branch]["min"], latest_cutoff)
-                directory[code]["branches"][branch]["max"] = max(directory[code]["branches"][branch]["max"], latest_cutoff)
+async def get_directory(
+    response: Response,
+    search: Optional[str] = None,
+    districts: Optional[List[str]] = Query(None),
+    branches: Optional[List[str]] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1),
+    db: Session = Depends(get_db)
+):
+    from sqlalchemy import or_, and_, cast, String, func
 
-    result = []
-    for item in directory.values():
-        branches_list = []
-        for b_name, b_range in item["branches"].items():
-            branches_list.append({
-                "name": b_name,
-                "min": round(b_range["min"], 2),
-                "max": round(b_range["max"], 2)
-            })
-        item["branches"] = branches_list
-        result.append(item)
-        
+    # --- Cache lookup (skip DB entirely for repeated identical requests) ---
+    search_norm = (search or "").strip().lower()
+    districts_norm = tuple(sorted(d.strip().lower() for d in (districts or []) if d.strip()))
+    branches_norm = tuple(sorted(b.strip().lower() for b in (branches or []) if b.strip()))
+    cache_key = (search_norm, districts_norm, branches_norm)
+
+    result = _get_directory_cache(cache_key)
+
+    if result is None:
+        # --- Full DB query + grouping (only runs on cache miss) ---
+        query = db.query(
+            CollegeCutoff.college_code,
+            CollegeCutoff.college_name,
+            CollegeCutoff.district,
+            CollegeCutoff.branch_name,
+            func.min(func.coalesce(
+                CollegeCutoff.cutoff_2025,
+                CollegeCutoff.cutoff_2024,
+                CollegeCutoff.cutoff_2023,
+                CollegeCutoff.cutoff_2022,
+                CollegeCutoff.cutoff_2021
+            )).label("min_c"),
+            func.max(func.coalesce(
+                CollegeCutoff.cutoff_2025,
+                CollegeCutoff.cutoff_2024,
+                CollegeCutoff.cutoff_2023,
+                CollegeCutoff.cutoff_2022,
+                CollegeCutoff.cutoff_2021
+            )).label("max_c")
+        ).filter(
+            CollegeCutoff.branch_name.isnot(None),
+            (CollegeCutoff.cutoff_2025 > 0) |
+            (CollegeCutoff.cutoff_2024 > 0) |
+            (CollegeCutoff.cutoff_2023 > 0) |
+            (CollegeCutoff.cutoff_2022 > 0) |
+            (CollegeCutoff.cutoff_2021 > 0)
+        )
+
+        if search_norm:
+            tokens = search_norm.split()
+            if tokens:
+                conditions = []
+                for token in tokens:
+                    token_conds = [
+                        CollegeCutoff.college_name.ilike(f"%{token}%"),
+                        CollegeCutoff.district.ilike(f"%{token}%"),
+                        cast(CollegeCutoff.college_code, String).ilike(f"%{token}%")
+                    ]
+                    conditions.append(or_(*token_conds))
+                query = query.filter(and_(*conditions))
+
+        if districts:
+            dist_conditions = []
+            for d in districts:
+                d_clean = d.strip().replace(".", "")
+                if d_clean:
+                    dist_conditions.append(func.replace(CollegeCutoff.district, ".", "").ilike(f"%{d_clean}%"))
+            if dist_conditions:
+                query = query.filter(or_(*dist_conditions))
+
+        if branches:
+            branch_conditions = []
+            for b in branches:
+                b_clean = b.strip().upper().replace(".", "")
+                if b_clean:
+                    branch_conditions.append(get_branch_filter_condition(b_clean))
+            if branch_conditions:
+                query = query.filter(or_(*branch_conditions))
+
+        rows = query.group_by(
+            CollegeCutoff.college_code,
+            CollegeCutoff.branch_name
+        ).order_by(CollegeCutoff.college_name).all()
+
+        directory: Dict[str, dict] = {}
+        for code_raw, name, district, branch, min_c, max_c in rows:
+            if not code_raw:
+                continue
+            code = str(code_raw).strip().zfill(4)
+            if code not in directory:
+                directory[code] = {
+                    "name": name,
+                    "district": district or "Tamil Nadu",
+                    "code": code,
+                    "branches": {}
+                }
+            if branch and min_c is not None and max_c is not None:
+                directory[code]["branches"][branch] = {"min": min_c, "max": max_c}
+
+        result = []
+        for item in directory.values():
+            item["branches"] = [
+                {"name": b_name, "min": round(b_range["min"], 2), "max": round(b_range["max"], 2)}
+                for b_name, b_range in item["branches"].items()
+            ]
+            result.append(item)
+
+        _set_directory_cache(cache_key, result)
+
+    # --- Pagination (always applied, even from cache) ---
+    total_colleges = len(result)
+    start_idx = (page - 1) * limit
+    paginated = result[start_idx: start_idx + limit]
+
+    # Tell browser to cache for 60 s (reduces even initial duplicate requests)
+    response.headers["Cache-Control"] = "public, max-age=60"
+
     return {
-        "total": len(result),
-        "colleges": result
+        "total": total_colleges,
+        "page": page,
+        "limit": limit,
+        "pages": (total_colleges + limit - 1) // limit,
+        "colleges": paginated
+    }
+
+
+@app.get("/metadata")
+async def get_metadata(db: Session = Depends(get_db)):
+    # Query all unique non-null districts and branches
+    districts = db.query(CollegeCutoff.district).filter(CollegeCutoff.district.isnot(None)).distinct().all()
+    branches = db.query(CollegeCutoff.branch_name).filter(CollegeCutoff.branch_name.isnot(None)).distinct().all()
+    
+    # Sort and clean
+    cleaned_districts = sorted(list(set(d[0].strip().upper() for d in districts if d[0])))
+    cleaned_branches = sorted(list(set(b[0].strip().upper() for b in branches if b[0])))
+    
+    return {
+        "districts": [d.title() for d in cleaned_districts],
+        "branches": [b.title() for b in cleaned_branches]
     }
 
 
@@ -648,6 +1045,7 @@ async def add_choice(session_id: str, college_data: dict):
     )
     
     if not is_duplicate:
+        college_data.setdefault("notes", "")
         USER_CHOICES[session_id].append(college_data)
     
     return {"status": "success", "count": len(USER_CHOICES[session_id])}
@@ -666,6 +1064,129 @@ async def remove_choice(session_id: str, college_data: dict):
 @app.get("/choice/{session_id}")
 async def get_choices(session_id: str):
     return USER_CHOICES.get(session_id, [])
+
+@app.post("/choice/clear")
+async def clear_choices(session_id: str):
+    if session_id in USER_CHOICES:
+        USER_CHOICES[session_id] = []
+    return {"status": "success", "count": 0}
+
+@app.post("/choice/reorder")
+async def reorder_choices(session_id: str, direction: str, index: int):
+    if session_id in USER_CHOICES:
+        choices = USER_CHOICES[session_id]
+        n = len(choices)
+        if direction == "up" and 0 < index < n:
+            choices[index], choices[index - 1] = choices[index - 1], choices[index]
+        elif direction == "down" and 0 <= index < n - 1:
+            choices[index], choices[index + 1] = choices[index + 1], choices[index]
+    return {"status": "success", "choices": USER_CHOICES.get(session_id, [])}
+
+@app.post("/choice/notes")
+async def update_choice_notes(session_id: str, index: int, notes: str):
+    if session_id in USER_CHOICES and 0 <= index < len(USER_CHOICES[session_id]):
+        USER_CHOICES[session_id][index]["notes"] = notes
+    return {"status": "success", "choices": USER_CHOICES.get(session_id, [])}
+
+# --- Cutoff Calculator Endpoints ---
+class CutoffCalcRequest(BaseModel):
+    maths: float
+    physics: float
+    chemistry: float
+    category: str
+    district: str
+    preferred_branch: str
+
+class CutoffCalcResponse(BaseModel):
+    cutoff: float
+    eligibility_tier: str
+    recommendation_summary: str
+    suggested_branches: List[str]
+
+@app.post("/calculate-cutoff", response_model=CutoffCalcResponse)
+async def calculate_cutoff(req: CutoffCalcRequest, db: Session = Depends(get_db)):
+    # Standard TNEA Cutoff formula: Maths (out of 100) + Physics/2 (out of 50) + Chemistry/2 (out of 50)
+    # This equals (Maths / 2.0) + (Physics / 4.0) + (Chemistry / 4.0) multiplied by 2 to yield a score out of 200.
+    cutoff_200 = float(req.maths + (req.physics / 2.0) + (req.chemistry / 2.0))
+    cutoff_200 = min(200.0, max(0.0, cutoff_200)) # clamp between 0 and 200
+    
+    # Query historic cutoff bounds in SQLite to get expected college metrics
+    # We join College to filter by district if specified
+    query = db.query(CollegeCutoff, College).join(College, College.college_code == CollegeCutoff.college_code)
+    
+    # Apply category filter
+    query = query.filter(CollegeCutoff.category == req.category)
+    
+    # Apply branch filter if valid
+    branch_clean = req.preferred_branch.strip() if req.preferred_branch else ""
+    if branch_clean and branch_clean.lower() != "all" and branch_clean.lower() != "any":
+        query = query.filter(CollegeCutoff.branch_name.ilike(f"%{branch_clean}%"))
+        
+    # Apply district filter if valid
+    district_clean = req.district.strip() if req.district else ""
+    if district_clean and district_clean.lower() != "all" and district_clean.lower() != "any":
+        query = query.filter(College.district.ilike(f"%{district_clean}%"))
+        
+    results = query.all()
+    
+    safe_count = 0
+    mod_count = 0
+    dream_count = 0
+    
+    for cutoff_row, college in results:
+        closing = cutoff_row.cutoff_2025
+        if not closing:
+            closing = cutoff_row.cutoff_2024
+        if not closing:
+            continue
+            
+        if cutoff_200 >= closing + 5.0:
+            safe_count += 1
+        elif cutoff_200 >= closing - 5.0:
+            mod_count += 1
+        else:
+            dream_count += 1
+            
+    # Classify overall eligibility tier
+    if cutoff_200 >= 175.0:
+        eligibility_tier = "Safe (Tier-1 Elite)"
+    elif cutoff_200 >= 135.0:
+        eligibility_tier = "Moderate (Tier-2 Mid)"
+    else:
+        eligibility_tier = "Dream (Tier-3 Aspirational)"
+        
+    # Build personalized recommendation summary
+    loc_str = f"in **{district_clean}**" if district_clean and district_clean.lower() != "all" else "across Tamil Nadu"
+    branch_str = f"**{branch_clean}**" if branch_clean and branch_clean.lower() != "all" else "engineering courses"
+    
+    if safe_count > 0 or mod_count > 0:
+        summary = (
+            f"Based on your calculated TNEA Cutoff of **{cutoff_200:.2f}/200** and category **{req.category}**, "
+            f"we identified **{safe_count} Safe** backups and **{mod_count} Moderate** college programs offering {branch_str} {loc_str}. "
+            f"You have a highly secure foundation for counselling!"
+        )
+    else:
+        summary = (
+            f"Your calculated TNEA Cutoff is **{cutoff_200:.2f}/200** under category **{req.category}**. "
+            f"Historic cutoff data indicates that {branch_str} {loc_str} is extremely competitive. "
+            f"We recommend expanding your preferred branches or districts in the College Finder to see more matches."
+        )
+        
+    # Suitability branches suggestion based on selection
+    suggested = ["Computer Science", "Information Technology", "AI & Data Science", "Electronics & Communication"]
+    if branch_clean:
+        b_lower = branch_clean.lower()
+        if "mech" in b_lower or "civil" in b_lower:
+            suggested = ["Mechanical Engineering", "Civil Engineering", "Robotics & Automation", "Electrical & Electronics"]
+        elif "elect" in b_lower or "ece" in b_lower or "eee" in b_lower:
+            suggested = ["Electronics & Communication", "Electrical & Electronics", "Instrumentation & Control", "Computer Science"]
+            
+    return {
+        "cutoff": cutoff_200,
+        "eligibility_tier": eligibility_tier,
+        "recommendation_summary": summary,
+        "suggested_branches": suggested
+    }
 
 @app.get("/rag_records")
 async def get_rag_records(search: Optional[str] = None):

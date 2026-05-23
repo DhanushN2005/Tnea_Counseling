@@ -36,6 +36,10 @@
                     <span class="icon"><i class="fas fa-comment-dots"></i></span>
                     <span class="label">Counselling Expert</span>
                 </button>
+                <button class="nav-item" data-tab="cutoff-calculator">
+                    <span class="icon"><i class="fas fa-calculator"></i></span>
+                    <span class="label">Cutoff Calculator</span>
+                </button>
                 <button class="nav-item" data-tab="finder">
                     <span class="icon"><i class="fas fa-search-location"></i></span>
                     <span class="label">College Finder</span>
@@ -135,6 +139,128 @@
                 </div>
             </section>
 
+            <!-- Cutoff Calculator View -->
+            <section id="cutoff-calculator-view" class="view">
+                <header class="view-header">
+                    <h2><i class="fas fa-calculator" style="color:var(--primary-color);"></i> TNEA Cutoff Calculator</h2>
+                    <p class="subtitle">Calculate your engineering counselling cutoff instantly</p>
+                </header>
+                
+                <div class="calculator-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    
+                    <!-- Left: Academic Inputs and Details Form -->
+                    <div class="info-card" style="margin: 0; padding: 1.5rem;">
+                        <div class="info-card-header"><i class="fas fa-edit"></i> Academic Marks & Preferences</div>
+                        <div class="info-card-body" style="padding-top: 1rem;">
+                            
+                            <!-- Formula Display -->
+                            <div class="formula-display-banner" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: var(--border-radius-sm); padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.82rem; text-align: center; color: var(--text-secondary);">
+                                <span style="font-weight: 700; color: var(--primary-color);"><i class="fas fa-info-circle"></i> Official TNEA Cutoff Formula:</span>
+                                <div style="font-family: monospace; font-size: 1rem; margin-top: 0.25rem; color: var(--text-primary); font-weight: bold;">
+                                    Cutoff = Maths + (Physics / 2) + (Chemistry / 2)
+                                </div>
+                            </div>
+                            
+                            <form id="cutoff-calc-form" style="display: flex; flex-direction: column; gap: 1rem;">
+                                
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+                                    <div class="form-group">
+                                        <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.35rem; display:block;">Maths (100)</label>
+                                        <input type="number" id="calc-maths" class="calc-mark-input" min="0" max="100" step="0.5" placeholder="0-100" required style="width: 100%; text-align: center; font-size: 1.1rem; font-weight: bold; border-color: rgba(96, 165, 250, 0.25); border-radius: var(--border-radius-sm); padding: 0.5rem; background: rgba(0,0,0,0.2); color: white;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.35rem; display:block;">Physics (100)</label>
+                                        <input type="number" id="calc-physics" class="calc-mark-input" min="0" max="100" step="0.5" placeholder="0-100" required style="width: 100%; text-align: center; font-size: 1.1rem; font-weight: bold; border-color: rgba(96, 165, 250, 0.25); border-radius: var(--border-radius-sm); padding: 0.5rem; background: rgba(0,0,0,0.2); color: white;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.35rem; display:block;">Chemistry (100)</label>
+                                        <input type="number" id="calc-chemistry" class="calc-mark-input" min="0" max="100" step="0.5" placeholder="0-100" required style="width: 100%; text-align: center; font-size: 1.1rem; font-weight: bold; border-color: rgba(96, 165, 250, 0.25); border-radius: var(--border-radius-sm); padding: 0.5rem; background: rgba(0,0,0,0.2); color: white;">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Community Quota Category</label>
+                                    <select id="calc-category" class="glossy-select" style="width:100%;">
+                                        <option value="OC">OC (Open Competition)</option>
+                                        <option value="BC">BC (Backward Class)</option>
+                                        <option value="BCM">BCM (Backward Class Muslim)</option>
+                                        <option value="MBC">MBC (Most Backward Class)</option>
+                                        <option value="SC">SC (Scheduled Caste)</option>
+                                        <option value="SCA">SCA (SC Arundhathiyar)</option>
+                                        <option value="ST">ST (Scheduled Tribe)</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Preferred District</label>
+                                    <select id="calc-district" class="glossy-select" style="width:100%;">
+                                        <option value="All">All Districts (Tamil Nadu)</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Preferred Branch / Specialization</label>
+                                    <select id="calc-branch" class="glossy-select" style="width:100%;">
+                                        <option value="All">All Branches</option>
+                                    </select>
+                                </div>
+                                
+                                <button type="submit" class="btn-primary" style="margin-top: 0.5rem; justify-content: center; width: 100%; padding: 0.85rem; font-size: 1rem; cursor: pointer;"><i class="fas fa-calculator"></i> Calculate Cutoff</button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Results and Predictions -->
+                    <div id="calc-result-panel" class="info-card hidden" style="margin: 0; padding: 1.5rem; border-color: rgba(16, 185, 129, 0.2);">
+                        <div class="info-card-header" style="color: var(--secondary-color);"><i class="fas fa-poll-h"></i> AI Eligibility & Expected Range</div>
+                        <div class="info-card-body" style="padding-top: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                            
+                            <!-- Large Circular Cutoff Display -->
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; background: rgba(255, 255, 255, 0.02); padding: 1rem; border-radius: var(--border-radius-md); border: 1px solid rgba(255, 255, 255, 0.04);">
+                                <div style="text-align: center;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; display: block; margin-bottom: 0.25rem;">Your Cutoff Score</span>
+                                    <span id="calc-result-value" style="font-size: 2.8rem; font-weight: 800; color: var(--secondary-color); text-shadow: 0 0 20px rgba(16, 185, 129, 0.4); font-family: monospace;">00.00</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.15rem;">Out of 200.00</span>
+                                </div>
+                                <div style="width: 2px; height: 50px; background: rgba(255, 255, 255, 0.1);"></div>
+                                <div style="text-align: center;">
+                                    <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; display: block; margin-bottom: 0.25rem;">Eligibility Tier</span>
+                                    <span id="calc-result-tier" class="probability-badge moderate" style="font-size: 0.85rem; padding: 0.4rem 0.85rem; border-radius: var(--border-radius-sm); display: inline-block;">Moderate</span>
+                                </div>
+                            </div>
+                            
+                            <!-- AI Advisor Comment Box -->
+                            <div id="calc-advisor-block" class="advisor-card success" style="margin-bottom: 0; padding: 1rem 1.25rem;">
+                                <div class="advisor-icon" style="color: #10b981;"><i class="fas fa-brain"></i></div>
+                                <div class="advisor-body">
+                                    <h4 style="color: #10b981; margin-bottom: 0.25rem; font-size: 0.95rem;">AI Counselling Advisor</h4>
+                                    <p id="calc-recommendation-summary" style="margin: 0; font-size: 0.82rem; line-height: 1.4; color: var(--text-secondary);"></p>
+                                </div>
+                            </div>
+                            
+                            <!-- AI Suitability Analysis -->
+                            <div>
+                                <h4 style="font-size: 0.85rem; margin-bottom: 0.65rem; color: var(--text-primary);"><i class="fas fa-chart-line" style="color: var(--primary-color);"></i> Suitability Analysis & Suggested Branches</h4>
+                                <div class="suggested-branches-grid" id="calc-suggested-branches" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                    <!-- Dynamic suggested branches pills -->
+                                </div>
+                            </div>
+                            
+                            <!-- Action CTAs -->
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem; border-top: 1px dashed rgba(255, 255, 255, 0.1); padding-top: 1rem; width: 100%;">
+                                <div style="display: flex; gap: 0.75rem; width: 100%;">
+                                    <button id="calc-action-find" class="btn-primary" style="flex: 1; justify-content: center; padding: 0.75rem; cursor: pointer;"><i class="fas fa-search"></i> Find Colleges</button>
+                                    <button id="calc-action-trends" class="btn-secondary" style="flex: 1; justify-content: center; padding: 0.75rem; cursor: pointer;"><i class="fas fa-chart-area"></i> Cutoff Trends</button>
+                                </div>
+                                <button id="calc-action-chat" class="btn-secondary" style="border-color: rgba(99, 102, 241, 0.3); color: #818cf8; justify-content: center; padding: 0.75rem; width: 100%; cursor: pointer;"><i class="fas fa-comment-medical"></i> Get AI Career Advice</button>
+                            </div>
+                            
+                        </div>
+                    </div>
+                    
+                </div>
+            </section>
+
             <!-- Finder View -->
             <section id="finder-view" class="view">
                 <header class="view-header">
@@ -162,11 +288,41 @@
                         </div>
                         <div class="form-group">
                             <label>District (Optional)</label>
-                            <input type="text" id="input-district" placeholder="e.g. Chennai">
+                            <div class="custom-multi-select" id="finder-district-select">
+                                <div class="select-trigger">
+                                    <span class="trigger-label">Select Districts</span>
+                                    <span class="trigger-badge" style="display: none;">0</span>
+                                    <i class="fas fa-chevron-down trigger-arrow"></i>
+                                </div>
+                                <div class="select-dropdown">
+                                    <div class="dropdown-search">
+                                        <i class="fas fa-search"></i>
+                                        <input type="text" placeholder="Search districts...">
+                                    </div>
+                                    <div class="dropdown-options" id="finder-district-options">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Branch (Optional)</label>
-                            <input type="text" id="input-branch" placeholder="e.g. Computer Science">
+                            <div class="custom-multi-select" id="finder-branch-select">
+                                <div class="select-trigger">
+                                    <span class="trigger-label">Select Branches</span>
+                                    <span class="trigger-badge" style="display: none;">0</span>
+                                    <i class="fas fa-chevron-down trigger-arrow"></i>
+                                </div>
+                                <div class="select-dropdown">
+                                    <div class="dropdown-search">
+                                        <i class="fas fa-search"></i>
+                                        <input type="text" placeholder="Search branches...">
+                                    </div>
+                                    <div class="dropdown-options" id="finder-branch-options">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <button id="find-colleges-btn" class="btn-primary">Find My Colleges</button>
@@ -189,12 +345,59 @@
                     <h2>College Cutoff Directory</h2>
                     <p class="subtitle">Comprehensive overview of previous year cutoff ranges</p>
                 </header>
-                <div class="directory-search-wrapper">
-                    <i class="fas fa-search directory-search-icon"></i>
-                    <input type="text" id="directory-search" placeholder="Search colleges by name, district, code, or branch...">
+                <div class="directory-controls-row">
+                    <div class="directory-search-wrapper">
+                        <i class="fas fa-search directory-search-icon"></i>
+                        <input type="text" id="directory-search" placeholder="Search colleges by name or code...">
+                    </div>
+                    
+                    <div class="custom-multi-select" id="directory-district-select">
+                        <div class="select-trigger">
+                            <span class="trigger-label">Filter Districts</span>
+                            <span class="trigger-badge" style="display: none;">0</span>
+                            <i class="fas fa-chevron-down trigger-arrow"></i>
+                        </div>
+                        <div class="select-dropdown">
+                            <div class="dropdown-search">
+                                <i class="fas fa-search"></i>
+                                <input type="text" placeholder="Search districts...">
+                            </div>
+                            <div class="dropdown-options" id="directory-district-options">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="custom-multi-select" id="directory-branch-select">
+                        <div class="select-trigger">
+                            <span class="trigger-label">Filter Branches</span>
+                            <span class="trigger-badge" style="display: none;">0</span>
+                            <i class="fas fa-chevron-down trigger-arrow"></i>
+                        </div>
+                        <div class="select-dropdown">
+                            <div class="dropdown-search">
+                                <i class="fas fa-search"></i>
+                                <input type="text" placeholder="Search branches...">
+                            </div>
+                            <div class="dropdown-options" id="directory-branch-options">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="directory-list" id="directory-container">
                     <div class="empty-state">Loading directory...</div>
+                </div>
+                
+                <!-- Modern Glassmorphic Directory Pagination Footer -->
+                <div class="directory-pagination" id="directory-pagination" style="display: none;">
+                    <button id="dir-prev-btn" class="btn-secondary">
+                        <i class="fas fa-chevron-left"></i> Previous
+                    </button>
+                    <span id="dir-page-info">Page 1 of 1 (0 colleges)</span>
+                    <button id="dir-next-btn" class="btn-secondary">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
                 </div>
             </section>
 
@@ -215,8 +418,44 @@
                 <header class="view-header">
                     <h2>My Choice List</h2>
                     <p class="subtitle">Draft your TNEA choice list for final submission</p>
-                    <button id="export-pdf-btn" class="btn-primary export-pdf-btn">Download Choice List (PDF)</button>
+                    <div class="choices-actions-row">
+                        <div class="download-dropdown-container">
+                            <button id="download-options-btn" class="btn-primary"><i class="fas fa-download"></i> Download Choice List <i class="fas fa-chevron-down" style="font-size:0.75rem; margin-left:0.35rem;"></i></button>
+                            <div class="download-dropdown-menu">
+                                <button class="download-opt" data-format="pdf"><i class="fas fa-file-pdf"></i> Download PDF Document</button>
+                                <button class="download-opt" data-format="csv"><i class="fas fa-file-csv"></i> Download CSV Spreadsheet</button>
+                                <button class="download-opt" data-format="txt"><i class="fas fa-file-alt"></i> Download Plain Text</button>
+                            </div>
+                        </div>
+                        <button id="clear-choices-btn" class="btn-secondary" style="border-color: rgba(239, 68, 68, 0.4); color: #ef4444;"><i class="fas fa-trash-alt"></i> Clear All</button>
+                    </div>
                 </header>
+                
+                <!-- Premium Safety Stats Grid -->
+                <div class="choices-stats-grid">
+                    <div class="choice-stat-card">
+                        <span class="stat-value" id="stat-total-choices">0</span>
+                        <span class="stat-label"><i class="fas fa-list-ol"></i> Total Choices</span>
+                    </div>
+                    <div class="choice-stat-card safe">
+                        <span class="stat-value" id="stat-safe-choices">0</span>
+                        <span class="stat-label"><i class="fas fa-check-double"></i> Safe Options</span>
+                    </div>
+                    <div class="choice-stat-card moderate">
+                        <span class="stat-value" id="stat-moderate-choices">0</span>
+                        <span class="stat-label"><i class="fas fa-check-circle"></i> Moderate Options</span>
+                    </div>
+                    <div class="choice-stat-card dream">
+                        <span class="stat-value" id="stat-dream-choices">0</span>
+                        <span class="stat-label"><i class="fas fa-star"></i> Dream Options</span>
+                    </div>
+                </div>
+
+                <!-- Strategic Counselling Advisor Card -->
+                <div id="counselling-advisor-card" class="advisor-card hidden">
+                    <!-- Dynamic advisor comments here -->
+                </div>
+
                 <div id="choices-container" class="directory-list">
                     <!-- Choices here -->
                 </div>
