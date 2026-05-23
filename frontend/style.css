@@ -4451,5 +4451,244 @@ body.light-theme .directory-pagination .btn-secondary:hover:not(:disabled) {
     background: rgba(0, 0, 0, 0.02);
 }
 
+/* ==========================================================================
+   12. Premium UX Animations, Glassmorphism Enhancements & UI Transitions
+   ========================================================================== */
+
+/* Enhanced Smooth View Transition (Fade, Slide, and Blur) */
+@keyframes fadeInUpBlur {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.99);
+        filter: blur(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+.view.active {
+    display: flex;
+    flex-direction: column;
+    opacity: 1;
+    animation: fadeInUpBlur 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* Premium Card Overrides: Reflection Glow & Float Hover */
+.college-card, 
+.info-card, 
+.choice-stat-card, 
+.advisor-card,
+.preset-card {
+    position: relative !important;
+    overflow: hidden !important;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.3s ease,
+                background-color 0.3s ease !important;
+}
+
+/* Float Up & Shadow Glow on Hover */
+.college-card:hover, 
+.info-card:hover, 
+.choice-stat-card:hover {
+    transform: translateY(-5px) scale(1.006);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45), 
+                0 0 25px hsla(var(--primary-hsl) / 0.12) !important;
+    border-color: rgba(99, 102, 241, 0.25) !important;
+    background-color: var(--bg-glass-elevated) !important;
+}
+
+/* Preset Cards Micro-Movement */
+.preset-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3), 
+                0 0 20px hsla(var(--secondary-hsl) / 0.15) !important;
+    border-color: rgba(6, 182, 212, 0.3) !important;
+}
+
+/* Light Mode Card Shadows and Border adjustments */
+body.light-theme .college-card:hover,
+body.light-theme .info-card:hover,
+body.light-theme .choice-stat-card:hover {
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.05), 
+                0 0 20px hsla(var(--primary-hsl) / 0.04) !important;
+    border-color: rgba(99, 102, 241, 0.2) !important;
+}
+
+/* Dynamic Glass reflection/shine sweep effect */
+.college-card::before, 
+.info-card::before, 
+.preset-card::before {
+    content: '';
+    position: absolute;
+    top: 0; 
+    left: -100%;
+    width: 60%; 
+    height: 100%;
+    background: linear-gradient(
+        120deg, 
+        transparent, 
+        rgba(255, 255, 255, 0.06), 
+        transparent
+    );
+    transform: skewX(-25deg);
+    transition: 0.75s;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.college-card:hover::before, 
+.info-card:hover::before, 
+.preset-card:hover::before {
+    left: 125%;
+}
+
+/* Elegant Breathing Pulse for Active AI Advisor Card */
+#calc-result-panel {
+    position: relative;
+    background: rgba(8, 11, 24, 0.45) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(16, 185, 129, 0.25) !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 30px rgba(16, 185, 129, 0.1) !important;
+    animation: cardPulse 4s infinite ease-in-out;
+}
+
+@keyframes cardPulse {
+    0%, 100% {
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 30px rgba(16, 185, 129, 0.1);
+        border-color: rgba(16, 185, 129, 0.25);
+    }
+    50% {
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 45px rgba(16, 185, 129, 0.3);
+        border-color: rgba(16, 185, 129, 0.5);
+    }
+}
+
+body.light-theme #calc-result-panel {
+    background: rgba(255, 255, 255, 0.6) !important;
+    border: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+/* Glowing outline and animation for the main CTA buttons */
+.btn-primary {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px hsla(var(--primary-hsl) / 0.3), 
+                0 0 15px hsla(var(--secondary-hsl) / 0.2) !important;
+}
+
+.btn-primary::after {
+    content: '';
+    position: absolute;
+    top: -50%; 
+    left: -50%;
+    width: 200%; 
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 60%);
+    transform: scale(0);
+    transition: transform 0.5s ease-out;
+    pointer-events: none;
+}
+
+.btn-primary:active::after {
+    transform: scale(1);
+    transition: transform 0s;
+}
+
+/* Counter Gauge Glow and Pulse */
+#calc-result-value {
+    animation: textGlowPulse 2.5s infinite alternate;
+}
+
+@keyframes textGlowPulse {
+    0% {
+        text-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+    }
+    100% {
+        text-shadow: 0 0 25px rgba(16, 185, 129, 0.6), 0 0 5px rgba(16, 185, 129, 0.2);
+    }
+}
+
+/* Elegant Focus States for Input fields */
+.calc-mark-input,
+.input-wrapper input,
+#input-cutoff,
+#directory-search,
+#tfc-search {
+    transition: all 0.3s ease !important;
+}
+
+.calc-mark-input:focus,
+.input-wrapper input:focus,
+#input-cutoff:focus,
+#directory-search:focus,
+#tfc-search:focus {
+    border-color: var(--secondary-color) !important;
+    background: rgba(0, 0, 0, 0.35) !important;
+    box-shadow: 0 0 15px rgba(6, 182, 212, 0.22) !important;
+    transform: translateY(-1px);
+}
+
+body.light-theme .calc-mark-input:focus,
+body.light-theme .input-wrapper input:focus,
+body.light-theme #input-cutoff:focus,
+body.light-theme #directory-search:focus,
+body.light-theme #tfc-search:focus {
+    background: #ffffff !important;
+    box-shadow: 0 0 15px rgba(6, 182, 212, 0.15) !important;
+}
+
+/* Choice list badge bounce animation */
+@keyframes badgeBounce {
+    0%, 100% { 
+        transform: scale(1); 
+    }
+    50% { 
+        transform: scale(1.35); 
+        background-color: var(--secondary-color); 
+        box-shadow: 0 0 15px var(--secondary-color);
+    }
+}
+
+.badge.bounce-anim {
+    animation: badgeBounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Smooth, Thin Scrollbar Aesthetics */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+body.light-theme ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.18);
+}
+
 
 

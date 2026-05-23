@@ -11,6 +11,41 @@ let directoryDebounceTimeout = null;
 let directoryAbortController = null;   // cancels stale in-flight requests
 let directoryLoadPending = false;       // debounce lock to stop burst calls
 
+// Helper function to animate values counting up
+function animateValue(id, start, end, duration) {
+    const obj = document.getElementById(id);
+    if (!obj) return;
+    const range = end - start;
+    const startTime = performance.now();
+    
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        // Easing: easeOutQuad
+        const easeProgress = progress * (2 - progress);
+        const value = start + (range * easeProgress);
+        obj.textContent = value.toFixed(2);
+        
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        } else {
+            obj.textContent = end.toFixed(2);
+        }
+    }
+    requestAnimationFrame(update);
+}
+
+// Helper function to update the choice list badge with animation
+function updateChoiceBadge(count) {
+    const badge = document.getElementById("choice-count");
+    if (badge) {
+        badge.textContent = count;
+        badge.classList.remove("bounce-anim");
+        void badge.offsetWidth; // Trigger reflow to restart CSS animation
+        badge.classList.add("bounce-anim");
+    }
+}
+
 // Initialize
 document.addEventListener("DOMContentLoaded", () => {
     initTheme();
@@ -167,7 +202,7 @@ function setupEventListeners() {
                         method: "POST"
                     });
                     if (response.ok) {
-                        document.getElementById("choice-count").textContent = 0;
+                        updateChoiceBadge(0);
                         showToast("Choice List cleared successfully!", "success");
                         loadChoices();
                     }
@@ -305,8 +340,8 @@ function setupEventListeners() {
                 selectedDistrictGlobal = district;
                 selectedBranchGlobal = branch;
                 
-                // Render result value
-                document.getElementById("calc-result-value").textContent = res.cutoff.toFixed(2);
+                // Render result value with count-up animation
+                animateValue("calc-result-value", 0, res.cutoff, 1000);
                 
                 // Render tier badge
                 const tierEl = document.getElementById("calc-result-tier");
@@ -470,8 +505,19 @@ function setupEventListeners() {
 function switchTab(tabId) {
     if (currentTab !== "profile") previousTab = currentTab;
     currentTab = tabId;
+    
+    // Highlight sidebar nav item
+    document.querySelectorAll(".nav-item").forEach(item => {
+        if (item.dataset.tab === tabId) {
+            item.classList.add("active");
+        } else {
+            item.classList.remove("active");
+        }
+    });
+
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-    document.getElementById(`${tabId}-view`).classList.add("active");
+    const viewEl = document.getElementById(`${tabId}-view`);
+    if (viewEl) viewEl.classList.add("active");
     
     if (tabId === "directory") {
         // Don't wipe search here — caller (cutoff trends) may have set filters
@@ -1307,7 +1353,7 @@ async function addToChoice(data) {
             body: JSON.stringify(data)
         });
         const resData = await response.json();
-        document.getElementById("choice-count").textContent = resData.count;
+        updateChoiceBadge(resData.count);
         showToast(`Added ${data.name} (${data.branch}) to Choice List!`, "success");
     } catch (error) {
         showToast("Failed to add college to Choice List.", "error");
@@ -1522,7 +1568,7 @@ async function removeChoiceItem(data) {
             body: JSON.stringify(data)
         });
         const resData = await response.json();
-        document.getElementById("choice-count").textContent = resData.count;
+        updateChoiceBadge(resData.count);
         showToast(`Removed ${data.name} from Choice List!`, "success");
         loadChoices(); // Reload choices view
     } catch (error) {
