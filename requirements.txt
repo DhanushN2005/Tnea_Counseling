@@ -1,18 +1,14 @@
+# Runtime dependencies (slim: no PyTorch / sentence-transformers)
 fastapi
-uvicorn
+uvicorn[standard]
+gunicorn
 pydantic
 sqlalchemy
-pandas
-langchain
-langchain-community
-langchain-huggingface
-chromadb
-ollama
-pypdf
-pytesseract
-pdf2image
-python-multipart
-requests
 python-dotenv
-sentence-transformers
+python-multipart
 groq
+ollama
+chromadb
+langchain-chroma
+langchain-core
+onnxruntime

@@ -1,0 +1,12 @@
+.git
+.env
+**/__pycache__
+scratch
+scripts
+*.csv
+*.log
+*.png
+all_colleges.txt
+ingestion_log.txt
+backend/data/docs
+backend/backend

@@ -1,0 +1,11 @@
+# Only needed to (re)build the vector DB / database with scripts/ (NOT for deployment)
+-r requirements.txt
+pandas
+langchain
+langchain-community
+langchain-huggingface
+sentence-transformers
+pypdf
+pytesseract
+pdf2image
+requests

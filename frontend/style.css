@@ -445,6 +445,20 @@ body.light-theme .nav-item:hover {
     gap: 0.85rem;
 }
 
+/* Built-by credit */
+.built-by {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0.85;
+}
+.built-by a {
+    color: var(--primary-color);
+    font-weight: 700;
+    text-decoration: none;
+}
+.built-by a:hover { text-decoration: underline; }
+
 .info-pill {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);

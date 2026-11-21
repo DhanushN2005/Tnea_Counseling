@@ -6,17 +6,17 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 import time
 import ollama
-import torch
 from sqlalchemy.orm import Session
 from .database import SessionLocal, College, TFCCenter, Contact, Course, HostelDetails, TransportDetails, CollegeCutoff
 from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from .embeddings import OnnxMiniLMEmbeddings
 import os
 from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 app = FastAPI(title="TNEA Pro Counselling AI")
@@ -52,18 +52,12 @@ def _set_directory_cache(key: tuple, result: list):
         oldest = min(_DIRECTORY_CACHE, key=lambda k: _DIRECTORY_CACHE[k]["ts"])
         del _DIRECTORY_CACHE[oldest]
 
-# --- GPU & Embeddings ---
-# FORCE CPU for embeddings to save VRAM for Ollama (llama3)
-# This prevents the "Ollama GPU/Memory Error" on most systems.
-device = "cpu"
-CHROMA_PATH = "backend/data/db/chroma_db"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-embeddings = HuggingFaceEmbeddings(
-    model_name=EMBEDDING_MODEL, 
-    model_kwargs={'device': device, 'local_files_only': True}
-)
+# --- Embeddings (ONNX Runtime, CPU, no PyTorch) ---
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend/
+CHROMA_PATH = os.getenv("CHROMA_PATH", os.path.join(BASE_DIR, "data", "db", "chroma_db"))
+embeddings = OnnxMiniLMEmbeddings()
 vector_db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings, collection_name="tnea_docs")
-print(f"--- Embeddings initialized on device: {device} ---")
+print("--- Embeddings initialized (ONNX, cpu) ---")
 
 def clean_district_name(d: str) -> str:
     if not d:
@@ -684,13 +678,13 @@ Please answer directly and helpfully. If the context has relevant data, use it p
     # -----------------------------------------------------------------
     try:
         if groq_client:
-            print("--- Attempting Groq (Llama-3.3-70b) ---")
+            print("--- Attempting Groq ---")
             chat_completion = groq_client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                model="llama-3.3-70b-versatile",
+                model=GROQ_MODEL,
                 temperature=0.4,
                 max_tokens=1024,
             )
@@ -1412,4 +1406,5 @@ async def get_rag_records(search: Optional[str] = None):
 async def health(): return {"status": "ok"}
 
 # Serve Frontend
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "frontend")
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

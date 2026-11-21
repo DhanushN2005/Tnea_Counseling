@@ -50,3 +50,7 @@ scratch/
 # Docker (optional, keep compose but ignore local overrides)
 *.env.local
 docker-compose.override.yml
+
+# Deployment data that MUST be committed (app needs these at runtime)
+!backend/data/db/tnea_structured.db
+!backend/data/db/chroma_db/chroma.sqlite3

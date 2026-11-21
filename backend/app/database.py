@@ -2,7 +2,11 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, F
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./backend/data/db/tnea_structured.db"
+import os
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend/
+SQLALCHEMY_DATABASE_URL = os.getenv(
+    "DATABASE_URL", "sqlite:///" + os.path.join(_BASE_DIR, "data", "db", "tnea_structured.db").replace("\\", "/")
+)
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
